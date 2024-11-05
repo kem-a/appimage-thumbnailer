@@ -5,32 +5,41 @@ size="$3"
 
 # Extract .DirIcon from AppImage
 echo "Extracting .DirIcon from AppImage..."
-thumb=$(7z e -so "$inFile" '.DirIcon' 2>/dev/null)
+iconfind=$(7z e -so "$inFile" '.DirIcon' 2>/dev/null)
 
-if [[ -z "$thumb" ]]; then
+if [[ -z "$iconfind" ]]; then
   echo "Failed to extract .DirIcon from AppImage."
   exit 1
 fi
 
 while true; do
-  echo "Testing icon: $thumb"
-  # Extract the icon file to check if it's a symlink or actual image
-  icon_data=$(7z e -so "$inFile" "$thumb" | base64)
+  echo "Testing icon: $iconfind"
+  # Extract the file and check its type
+  file_type=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | file -)
   
-  if [[ -n "$icon_data" ]]; then
-    echo "Icon found: $thumb"
-    echo "$icon_data" | base64 -d | magick - -background none -resize "$size" "$outFile"
-    if [[ $? -ne 0 ]]; then
-      echo "Failed to create thumbnail using ImageMagick."
+  if echo "$file_type" | grep -Eqi "PNG|SVG"; then
+    # Handle image file directly
+    echo "Found image file: $iconfind"
+    icon_data=$(7z e -so "$inFile" "$iconfind" | base64)
+    if [[ -n "$icon_data" ]]; then
+      echo "$icon_data" | base64 -d | magick - -background none -resize "$size" "$outFile"
+      if [[ $? -ne 0 ]]; then
+        echo "Failed to create thumbnail using ImageMagick."
+        exit 1
+      fi
+      break
+    fi
+  else
+    # Assume it's a symlink and try to read its contents
+    potential_target=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | tr -d '\n\r')
+    if [[ -n "$potential_target" ]]; then
+      echo "Found potential symlink pointing to: $potential_target"
+      iconfind="$potential_target"
+      # Continue loop to process the target path
+    else
+      echo "Failed to read file or symlink: $iconfind"
       exit 1
     fi
-    break
-  elif [[ -L "$thumb" ]]; then
-    thumb_path=$(7z e -so "$inFile" "$thumb" 2>/dev/null | readlink -f)
-    thumb="$thumb_path"
-  else
-    echo "Icon file not found: $thumb"
-    exit 1
   fi
 done
 
