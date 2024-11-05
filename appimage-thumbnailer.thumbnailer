@@ -1,0 +1,4 @@
+[Thumbnailer Entry]
+TryExec=appimage-thumbnailer
+Exec=appimage-thumbnailer %i %o %s
+MimeType=application/vnd.appimage;application/x-iso9660-appimage;application/x-appimage
