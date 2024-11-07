@@ -14,10 +14,20 @@ fi
 while true; do
   file_type=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | file -)
   
-  if echo "$file_type" | grep -Eqi "PNG|SVG"; then
+  if echo "$file_type" | grep -qi "SVG"; then
     icon_data=$(7z e -so "$inFile" "$iconfind" | base64)
     if [[ -n "$icon_data" ]]; then
-      echo "$icon_data" | base64 -d | magick - -background none -resize "$size" "$outFile"
+      echo "$icon_data" | base64 -d | rsvg-convert -w "$size" -h "$size" -o "$outFile"
+      if [[ $? -ne 0 ]]; then
+        echo "Failed to create thumbnail using rsvg-convert." >&2
+        exit 1
+      fi
+      break
+    fi
+  elif echo "$file_type" | grep -qi "PNG"; then
+    icon_data=$(7z e -so "$inFile" "$iconfind" | base64)
+    if [[ -n "$icon_data" ]]; then
+      echo "$icon_data" | base64 -d | magick - -resize "$size" "$outFile"
       if [[ $? -ne 0 ]]; then
         echo "Failed to create thumbnail using ImageMagick." >&2
         exit 1

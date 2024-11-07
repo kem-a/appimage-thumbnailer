@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import os
 import subprocess
-import base64
 from pathlib import Path
 import io
 from PIL import Image
@@ -18,6 +16,20 @@ def run_command(cmd, shell=False):
         print(f"Error: {e.stderr}", file=sys.stderr)
         sys.exit(1)
 
+def parse_size(size_str):
+    """Parse size argument that can be either a number or WxH format"""
+    try:
+        if 'x' in size_str:
+            # Handle WxH format by taking the largest dimension
+            w, h = map(int, size_str.lower().split('x'))
+            return max(w, h)
+        else:
+            # Handle numeric format
+            return int(size_str)
+    except (ValueError, TypeError) as e:
+        print(f"Invalid size format. Expected number or WxH format, got: {size_str}", file=sys.stderr)
+        sys.exit(1)
+
 def main():
     if len(sys.argv) != 4:
         print("Usage: appimage-thumbnailer <input> <output> <size>", file=sys.stderr)
@@ -25,7 +37,7 @@ def main():
 
     in_file = str(Path(sys.argv[1]).resolve())
     out_file = str(Path(sys.argv[2]).resolve())
-    size = int(sys.argv[3])
+    size = parse_size(sys.argv[3])  # Now handles both "256" and "256x256" formats
 
     # Extract .DirIcon from AppImage
     icon_find = run_command(['7z', 'e', '-so', in_file, '.DirIcon'])
