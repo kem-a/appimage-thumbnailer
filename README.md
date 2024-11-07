@@ -15,7 +15,6 @@ A simple and efficient thumbnailer for AppImage files that extracts and displays
 - `7z` (p7zip)
 - `ImageMagick`
 - `base64`
-- `file`
 
 ## Installation
 
