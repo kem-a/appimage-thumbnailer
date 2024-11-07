@@ -8,6 +8,7 @@ A simple and efficient thumbnailer for AppImage files that extracts and displays
 - Supports PNG and SVG icon formats
 - Automatically resizes thumbnails to requested size
 - Integrates with system file managers
+- Does not support zstd compressed AppImage files (use [appimageinfo](https://github.com/kem-a/appimageinfo) to check)
 
 ## Requirements
 
