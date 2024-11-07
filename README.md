@@ -25,13 +25,13 @@ cd appimage-thumbnailer
 ```
 2. Install the thumbnailer:
 ```bash
-sudo sh install
+sudo sh install.sh
 ```
 
 ## Uninstallation
 To remove the thumbnailer:
 ```bash
-sudo sh uninstall
+sudo sh uninstall.sh
 ```
 
 ## How It Works
