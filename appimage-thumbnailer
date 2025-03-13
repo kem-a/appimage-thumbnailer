@@ -3,6 +3,12 @@ inFile="$(realpath "$1")"
 outFile="$(realpath -m "$2")"
 size="$3"
 
+# Check if size is provided and valid
+if [[ -z "$size" ]] || ! [[ "$size" =~ ^[0-9]+$ ]]; then
+  # Default to 256px if size is not provided or invalid
+  size="256"
+fi
+
 # Extract .DirIcon from AppImage
 iconfind=$(7z e -so "$inFile" '.DirIcon' 2>/dev/null)
 
@@ -27,7 +33,7 @@ while true; do
   elif echo "$file_type" | grep -qi "PNG"; then
     icon_data=$(7z e -so "$inFile" "$iconfind" | base64)
     if [[ -n "$icon_data" ]]; then
-      echo "$icon_data" | base64 -d | magick - -resize "$size" "$outFile"
+      echo "$icon_data" | base64 -d | magick - -resize "${size}x${size}" "$outFile"
       if [[ $? -ne 0 ]]; then
         echo "Failed to create thumbnail using ImageMagick." >&2
         exit 1
