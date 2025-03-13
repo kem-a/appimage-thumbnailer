@@ -4,7 +4,7 @@ A simple and efficient thumbnailer for AppImage files that extracts and displays
 
 ## Features
 
-- Extracts `.DirIcon` from AppImage files
+- Extracts icon from AppImage files
 - Supports PNG and SVG icon formats
 - Automatically resizes thumbnails to requested size
 - Integrates with system file managers
@@ -36,7 +36,7 @@ sudo sh uninstall.sh
 ```
 
 ## How It Works
-The thumbnailer extracts the .DirIcon from AppImage files using 7zip, converts it to the appropriate size using ImageMagick, and saves it as a thumbnail that your file manager can display.
+The thumbnailer extracts the icon from AppImage files using 7zip, converts it to the appropriate size using ImageMagick, and saves it as a thumbnail that your file manager can display.
 
 ## File Manager Integration
 The thumbnailer is automatically integrated with file managers that support the freedesktop.org thumbnail specification through the installed .thumbnailer file in thumbnailers.
