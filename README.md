@@ -35,6 +35,14 @@ To remove the thumbnailer:
 sudo sh uninstall.sh
 ```
 
+## Clean thumbnail cache
+To clean the thumbnailer cache in GNOME:
+```bash
+rm -rf ~/.cache/thumbnails/*
+```
+This removes all thumbnails from your cache directory.
+
+
 ## How It Works
 The thumbnailer extracts the icon from AppImage files using 7zip, converts it to the appropriate size using ImageMagick, and saves it as a thumbnail that your file manager can display.
 
