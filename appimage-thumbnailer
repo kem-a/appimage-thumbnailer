@@ -9,44 +9,88 @@ if [[ -z "$size" ]] || ! [[ "$size" =~ ^[0-9]+$ ]]; then
   size="256"
 fi
 
-# Extract .DirIcon from AppImage
-iconfind=$(7z e -so "$inFile" '.DirIcon' 2>/dev/null)
-
-if [[ -z "$iconfind" ]]; then
-  echo "Failed to extract .DirIcon from AppImage." >&2
-  exit 1
-fi
-
-while true; do
-  file_type=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | file -)
+# Function to process icon and create thumbnail
+process_icon() {
+  local icon_path="$1"
+  local file_type=$(7z e -so "$inFile" "$icon_path" 2>/dev/null | file -)
   
   if echo "$file_type" | grep -qi "SVG"; then
-    icon_data=$(7z e -so "$inFile" "$iconfind" | base64)
+    icon_data=$(7z e -so "$inFile" "$icon_path" | base64)
     if [[ -n "$icon_data" ]]; then
       echo "$icon_data" | base64 -d | rsvg-convert -w "$size" -h "$size" -o "$outFile"
-      if [[ $? -ne 0 ]]; then
-        echo "Failed to create thumbnail using rsvg-convert." >&2
-        exit 1
-      fi
-      break
+      return $?
     fi
   elif echo "$file_type" | grep -qi "PNG"; then
-    icon_data=$(7z e -so "$inFile" "$iconfind" | base64)
+    icon_data=$(7z e -so "$inFile" "$icon_path" | base64)
     if [[ -n "$icon_data" ]]; then
       echo "$icon_data" | base64 -d | magick - -resize "${size}x${size}" "$outFile"
-      if [[ $? -ne 0 ]]; then
-        echo "Failed to create thumbnail using ImageMagick." >&2
-        exit 1
-      fi
-      break
-    fi
-  else
-    potential_target=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | tr -d '\n\r')
-    if [[ -n "$potential_target" ]]; then
-      iconfind="$potential_target"
-    else
-      echo "Failed to read icon file: $iconfind" >&2
-      exit 1
+      return $?
     fi
   fi
-done
+  return 1
+}
+
+# Try to extract .DirIcon from AppImage
+iconfind=$(7z e -so "$inFile" '.DirIcon' 2>/dev/null)
+
+if [[ -n "$iconfind" ]]; then
+  while true; do
+    file_type=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | file -)
+    
+    if echo "$file_type" | grep -qi "SVG\|PNG"; then
+      if process_icon "$iconfind"; then
+        exit 0
+      else
+        echo "Failed to create thumbnail from .DirIcon." >&2
+      fi
+      break
+    else
+      potential_target=$(7z e -so "$inFile" "$iconfind" 2>/dev/null | tr -d '\n\r')
+      if [[ -n "$potential_target" ]]; then
+        iconfind="$potential_target"
+      else
+        echo "Failed to read icon file: $iconfind" >&2
+        break
+      fi
+    fi
+  done
+fi
+
+# Fallback: Try to find .desktop file and extract icon reference
+desktop_file=$(7z l "$inFile" | grep -i '\.desktop$' | awk '{print $NF}' | head -1)
+if [[ -n "$desktop_file" ]]; then
+  # Extract icon name from .desktop file
+  icon_name=$(7z e -so "$inFile" "$desktop_file" 2>/dev/null | grep -i "^Icon=" | cut -d= -f2- | tr -d '\r\n')
+  
+  if [[ -n "$icon_name" ]]; then
+    # Look for icon file with extension
+    for ext in svg png xpm; do
+      # Try with exact name
+      if process_icon "$icon_name.$ext"; then
+        exit 0
+      fi
+      
+      # Try various paths where icons might be stored
+      for path in ".local/share/icons" "usr/share/icons" "usr/share/pixmaps"; do
+        # Try to find the icon in common locations
+        possible_icons=$(7z l "$inFile" | grep -i "$path/.*$icon_name.*\.$ext$" | awk '{print $NF}')
+        
+        if [[ -n "$possible_icons" ]]; then
+          while read -r icon_path; do
+            if process_icon "$icon_path"; then
+              exit 0
+            fi
+          done <<< "$possible_icons"
+        fi
+      done
+    done
+    
+    # Try with exact icon_name (in case it already has extension)
+    if process_icon "$icon_name"; then
+      exit 0
+    fi
+  fi
+fi
+
+echo "Failed to extract icon from AppImage." >&2
+exit 1
