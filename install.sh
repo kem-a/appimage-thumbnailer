@@ -22,3 +22,4 @@ echo "Installing thumbnailer configuration to /usr/share/thumbnailers..."
 install -m 644 appimage-thumbnailer.thumbnailer /usr/share/thumbnailers/appimage-thumbnailer.thumbnailer
 
 echo "Installation completed successfully!"
+echo "Now log out for thumbnailer to start" 
