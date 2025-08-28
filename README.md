@@ -21,7 +21,7 @@ A simple and efficient thumbnailer for AppImage files that extracts and displays
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/appimage-thumbnailer
+git clone https://github.com/yourusername/appimage-thumbnailer &&
 cd appimage-thumbnailer
 ```
 2. Install the thumbnailer:
