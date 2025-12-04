@@ -12,7 +12,7 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 ## Features
 - Resolves `.DirIcon` pointers (with bounded symlink depth) before falling back to the first root-level `.svg` and then `.png` inside the AppImage.
 - Streams archive data directly from `7z` into librsvg/GdkPixbuf without temporary files.
-- Preserves aspect ratio, never upscales unnecessarily, and honors requested sizes inside the safe `1–4096` range (default `256`).
+- Preserves aspect ratio while scaling toward the requested size (upscales when the source is smaller) within the safe `1–4096` range (default `256`).
 - Ships `appimage-thumbnailer.thumbnailer` so file managers can dispatch the helper automatically once installed.
 
 ## Prerequisites

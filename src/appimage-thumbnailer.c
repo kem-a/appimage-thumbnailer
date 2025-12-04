@@ -281,14 +281,20 @@ scale_pixbuf(GdkPixbuf *pixbuf, int size)
     if (width <= 0 || height <= 0)
         return NULL;
 
-    if (width <= size && height <= size) {
+    double scale = MIN((double) size / (double) width, (double) size / (double) height);
+    if (!isfinite(scale) || scale <= 0)
+        scale = 1.0;
+
+    int target_w = MAX(1, (int) lround(width * scale));
+    int target_h = MAX(1, (int) lround(height * scale));
+
+    target_w = MIN(target_w, size);
+    target_h = MIN(target_h, size);
+
+    if (target_w == width && target_h == height) {
         g_object_ref(pixbuf);
         return pixbuf;
     }
-
-    const double scale = MIN((double) size / (double) width, (double) size / (double) height);
-    const int target_w = MAX(1, (int) lround(width * scale));
-    const int target_h = MAX(1, (int) lround(height * scale));
 
     return gdk_pixbuf_scale_simple(pixbuf, target_w, target_h, GDK_INTERP_BILINEAR);
 }
