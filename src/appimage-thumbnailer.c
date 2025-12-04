@@ -18,8 +18,8 @@
 #include <librsvg/rsvg.h>
 
 #define DEFAULT_THUMBNAIL_SIZE 256
-#define MAX_DIRICON_CHAIN 8
-#define POINTER_TEXT_LIMIT 4096
+#define MAX_SYMLINK_DEPTH 5
+#define POINTER_TEXT_LIMIT 1024
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -47,7 +47,6 @@ command_capture(const char *const argv[], GByteArray **output)
     }
 
     if (pid == 0) {
-        // Child
         close(pipe_fd[0]);
         if (dup2(pipe_fd[1], STDOUT_FILENO) < 0) {
             _exit(127);
@@ -100,21 +99,14 @@ command_capture(const char *const argv[], GByteArray **output)
 static gboolean
 extract_entry(const char *archive, const char *entry, GByteArray **output)
 {
-    if (entry == NULL || *entry == '\0')
+    if (!archive || !entry || *entry == '\0')
         return FALSE;
 
     gchar *clean_entry = NULL;
-    if (entry[0] == '/') {
+    if (entry[0] == '/')
         clean_entry = g_strdup(entry + 1);
-    } else {
+    else
         clean_entry = g_strdup(entry);
-    }
-
-    if (clean_entry[0] == '.' && clean_entry[1] == '/' && clean_entry[2] == '\0') {
-        g_printerr("Invalid archive entry %s\n", entry);
-        g_free(clean_entry);
-        return FALSE;
-    }
 
     const char *argv[] = {"7z", "e", "-so", archive, clean_entry, NULL};
     gboolean ok = command_capture(argv, output);
@@ -137,11 +129,7 @@ list_archive_paths(const char *archive, GPtrArray **paths_out)
         if (g_str_has_prefix(line, "Path = ")) {
             const gchar *path = line + 7;
             if (*path != '\0') {
-                gchar *normalized = g_strdup(path);
-                if (normalized[0] == '/') {
-                    size_t len = strlen(normalized + 1) + 1;
-                    memmove(normalized, normalized + 1, len);
-                }
+                gchar *normalized = g_strdup(path[0] == '/' ? path + 1 : path);
                 g_ptr_array_add(paths, normalized);
             }
         }
@@ -161,17 +149,18 @@ list_archive_paths(const char *archive, GPtrArray **paths_out)
 static gboolean
 is_pointer_candidate(const guchar *data, gsize len, gchar **pointer_out)
 {
-    if (len == 0 || len > POINTER_TEXT_LIMIT)
+    if (!data || len == 0 || len > POINTER_TEXT_LIMIT)
         return FALSE;
 
     for (gsize i = 0; i < len; ++i) {
         if (data[i] == '\0')
             return FALSE;
+        if (!g_ascii_isprint(data[i]) && !g_ascii_isspace(data[i]))
+            return FALSE;
     }
 
     gchar *text = g_strndup((const gchar *) data, (gssize) len);
     gchar *trimmed = g_strstrip(text);
-
     if (*trimmed == '\0') {
         g_free(text);
         return FALSE;
@@ -180,8 +169,6 @@ is_pointer_candidate(const guchar *data, gsize len, gchar **pointer_out)
     for (const gchar *c = trimmed; *c != '\0'; ++c) {
         if (*c == '/' || *c == '.' || *c == '-' || *c == '_' || g_ascii_isalnum(*c))
             continue;
-        if (g_ascii_isspace(*c))
-            break;
         g_free(text);
         return FALSE;
     }
@@ -307,14 +294,8 @@ scale_pixbuf(GdkPixbuf *pixbuf, int size)
 }
 
 static gboolean
-process_icon_payload(const guchar *data, gsize len, const char *out_path, int size, gchar **pointer_out)
+process_icon_payload(const guchar *data, gsize len, const char *out_path, int size)
 {
-    if (pointer_out)
-        *pointer_out = NULL;
-
-    if (is_pointer_candidate(data, len, pointer_out))
-        return FALSE;
-
     if (payload_is_svg(data, len)) {
         if (process_svg_payload(data, len, out_path, size))
             return TRUE;
@@ -363,55 +344,16 @@ process_icon_payload(const guchar *data, gsize len, const char *out_path, int si
 }
 
 static gboolean
-try_process_entry_once(const char *archive, const char *entry, const char *out_path, int size)
+process_entry_following_symlinks(const char *archive,
+                                 const char *entry,
+                                 const char *out_path,
+                                 int size)
 {
-    GByteArray *payload = NULL;
-    if (!extract_entry(archive, entry, &payload))
+    if (!entry)
         return FALSE;
 
-    gboolean ok = process_icon_payload(payload->data, payload->len, out_path, size, NULL);
-    g_byte_array_unref(payload);
-    return ok;
-}
-
-static gboolean
-try_process_entry_variants(const char *archive, const char *entry, const char *out_path, int size)
-{
-    if (!entry || *entry == '\0')
-        return FALSE;
-
-    gchar *normalized = g_strdup(entry);
-    gchar *trimmed = g_strstrip(normalized);
-
-    const gchar *candidates[4] = {trimmed, NULL, NULL, NULL};
-    if (*trimmed == '/')
-        candidates[1] = trimmed + 1;
-    else
-        candidates[1] = trimmed;
-
-    if (!g_str_has_prefix(candidates[1], "./"))
-        candidates[2] = g_strconcat("./", candidates[1], NULL);
-
-    gboolean success = FALSE;
-    for (int i = 0; i < 3 && candidates[i] != NULL; ++i) {
-        if (try_process_entry_once(archive, candidates[i], out_path, size)) {
-            success = TRUE;
-            break;
-        }
-    }
-
-    if (candidates[2])
-        g_free((gpointer) candidates[2]);
-    g_free(normalized);
-    return success;
-}
-
-static gboolean
-try_dir_icon(const char *archive, const char *out_path, int size)
-{
-    gchar *current = g_strdup(".DirIcon");
-
-    for (int depth = 0; depth < MAX_DIRICON_CHAIN && current != NULL; ++depth) {
+    gchar *current = g_strdup(entry);
+    for (int depth = 0; depth < MAX_SYMLINK_DEPTH && current != NULL; ++depth) {
         GByteArray *payload = NULL;
         if (!extract_entry(archive, current, &payload)) {
             g_free(current);
@@ -419,207 +361,44 @@ try_dir_icon(const char *archive, const char *out_path, int size)
         }
 
         gchar *next = NULL;
-        gboolean ok = process_icon_payload(payload->data, payload->len, out_path, size, &next);
-        g_byte_array_unref(payload);
-
-        if (ok) {
+        if (is_pointer_candidate(payload->data, payload->len, &next)) {
+            g_byte_array_unref(payload);
             g_free(current);
-            g_free(next);
-            return TRUE;
+            current = next;
+            continue;
         }
 
+        gboolean ok = process_icon_payload(payload->data, payload->len, out_path, size);
+        g_byte_array_unref(payload);
         g_free(current);
-        current = next;
+        g_free(next);
+        return ok;
     }
 
-    g_printerr("Failed to resolve .DirIcon within %d hops\n", MAX_DIRICON_CHAIN);
     g_free(current);
     return FALSE;
 }
 
-static gchar *
-find_first_desktop_entry(GPtrArray *paths)
+static gboolean
+path_is_root_file(const gchar *path)
 {
+    return path && strchr(path, '/') == NULL;
+}
+
+static gchar *
+find_root_with_extension(GPtrArray *paths, const char *extension)
+{
+    if (!paths || !extension)
+        return NULL;
     for (guint i = 0; i < paths->len; ++i) {
         const gchar *path = paths->pdata[i];
-        const gchar *suffix = g_strrstr(path, ".desktop");
-        if (suffix && g_ascii_strcasecmp(suffix, ".desktop") == 0)
+        if (!path_is_root_file(path))
+            continue;
+        const gchar *dot = strrchr(path, '.');
+        if (dot && g_ascii_strcasecmp(dot, extension) == 0)
             return g_strdup(path);
     }
     return NULL;
-}
-
-static gchar *
-extract_icon_key(GByteArray *desktop_payload)
-{
-    gchar **lines = g_strsplit((const gchar *) desktop_payload->data, "\n", -1);
-    gchar *icon = NULL;
-
-    for (gint i = 0; lines[i] != NULL && icon == NULL; ++i) {
-        gchar *line = g_strstrip(lines[i]);
-        if (*line == '#' || *line == '\0')
-            continue;
-        if (g_ascii_strncasecmp(line, "Icon=", 5) == 0) {
-            icon = g_strdup(line + 5);
-        }
-    }
-
-    g_strfreev(lines);
-    return icon;
-}
-
-static gchar *
-icon_basename(const gchar *icon_name)
-{
-    gchar *copy = g_strdup(icon_name);
-    gchar *trimmed = g_strstrip(copy);
-    while (*trimmed == '/')
-        trimmed++;
-    gchar *result = g_strdup(trimmed);
-    g_free(copy);
-    return result;
-}
-
-static gchar *
-remove_extension(const gchar *name)
-{
-    gchar *copy = g_strdup(name);
-    gchar *dot = strrchr(copy, '.');
-    if (dot)
-        *dot = '\0';
-    return copy;
-}
-
-static gboolean
-entry_basename_matches(const gchar *entry, const gchar *needle, const gchar *ext)
-{
-    if (!g_str_has_suffix(entry, ext))
-        return FALSE;
-
-    gchar *basename = g_path_get_basename(entry);
-    const gsize ext_len = strlen(ext);
-    const gsize base_len = strlen(basename);
-    if (base_len <= ext_len) {
-        g_free(basename);
-        return FALSE;
-    }
-
-    basename[base_len - ext_len] = '\0';
-    gboolean match = g_ascii_strcasecmp(basename, needle) == 0;
-    g_free(basename);
-    return match;
-}
-
-static gboolean
-search_icon_roots(const char *archive,
-                  GPtrArray *paths,
-                  const gchar *icon_root,
-                  const char *out_path,
-                  int size)
-{
-    static const gchar *extensions[] = {".svg", ".png", ".xpm"};
-    static const gchar *roots[] = {
-        ".local/share/icons",
-        "usr/share/icons",
-        "usr/share/pixmaps"
-    };
-
-    gchar *base_only = g_path_get_basename(icon_root);
-    gchar *needle = remove_extension(base_only);
-    g_free(base_only);
-
-    for (guint r = 0; r < G_N_ELEMENTS(roots); ++r) {
-        for (guint p = 0; p < paths->len; ++p) {
-            const gchar *entry = paths->pdata[p];
-            if (!g_str_has_prefix(entry, roots[r]))
-                continue;
-            for (guint e = 0; e < G_N_ELEMENTS(extensions); ++e) {
-                if (entry_basename_matches(entry, needle, extensions[e])) {
-                    if (try_process_entry_variants(archive, entry, out_path, size)) {
-                        g_free(needle);
-                        return TRUE;
-                    }
-                }
-            }
-        }
-    }
-
-    g_free(needle);
-    return FALSE;
-}
-
-static gboolean
-try_icon_from_listing(const char *archive,
-                      GPtrArray *paths,
-                      const gchar *icon_name,
-                      const char *out_path,
-                      int size)
-{
-    static const gchar *extensions[] = {".svg", ".png", ".xpm"};
-
-    gchar *normalized = icon_basename(icon_name);
-
-    if (try_process_entry_variants(archive, normalized, out_path, size)) {
-        g_free(normalized);
-        return TRUE;
-    }
-
-    gchar *without_ext = remove_extension(normalized);
-
-    for (guint i = 0; i < G_N_ELEMENTS(extensions); ++i) {
-        gchar *candidate = g_strconcat(without_ext, extensions[i], NULL);
-        gboolean ok = try_process_entry_variants(archive, candidate, out_path, size);
-        g_free(candidate);
-        if (ok) {
-            g_free(without_ext);
-            g_free(normalized);
-            return TRUE;
-        }
-    }
-
-    gboolean found = search_icon_roots(archive, paths, normalized, out_path, size);
-
-    g_free(without_ext);
-    g_free(normalized);
-    return found;
-}
-
-static gboolean
-try_desktop_fallback(const char *archive, const char *out_path, int size)
-{
-    GPtrArray *paths = NULL;
-    if (!list_archive_paths(archive, &paths))
-        return FALSE;
-
-    gchar *desktop_entry = find_first_desktop_entry(paths);
-    if (!desktop_entry) {
-        g_ptr_array_unref(paths);
-        return FALSE;
-    }
-
-    GByteArray *desktop_payload = NULL;
-    gboolean ok = extract_entry(archive, desktop_entry, &desktop_payload);
-    if (!ok) {
-        g_free(desktop_entry);
-        g_ptr_array_unref(paths);
-        return FALSE;
-    }
-
-    gchar *icon_key = extract_icon_key(desktop_payload);
-    g_byte_array_unref(desktop_payload);
-
-    if (!icon_key) {
-        g_free(desktop_entry);
-        g_ptr_array_unref(paths);
-        return FALSE;
-    }
-
-    gboolean result = try_icon_from_listing(archive, paths, icon_key, out_path, size);
-
-    g_free(icon_key);
-    g_free(desktop_entry);
-    g_ptr_array_unref(paths);
-    return result;
 }
 
 static char *
@@ -669,22 +448,33 @@ main(int argc, char **argv)
 
     const int size = parse_size_argument(argc == 4 ? argv[3] : NULL);
 
-    gboolean success = FALSE;
-
-    if (try_dir_icon(input, output, size)) {
-        success = TRUE;
-    } else if (try_desktop_fallback(input, output, size)) {
-        success = TRUE;
-    }
+    gboolean success = process_entry_following_symlinks(input, ".DirIcon", output, size);
 
     if (!success) {
-        g_printerr("Failed to extract icon from AppImage\n");
-        g_free(input);
-        g_free(output);
-        return EXIT_FAILURE;
+        GPtrArray *paths = NULL;
+        if (list_archive_paths(input, &paths)) {
+            gchar *svg_entry = find_root_with_extension(paths, ".svg");
+            if (svg_entry) {
+                success = process_entry_following_symlinks(input, svg_entry, output, size);
+                g_free(svg_entry);
+            }
+
+            if (!success) {
+                gchar *png_entry = find_root_with_extension(paths, ".png");
+                if (png_entry) {
+                    success = process_entry_following_symlinks(input, png_entry, output, size);
+                    g_free(png_entry);
+                }
+            }
+
+            g_ptr_array_unref(paths);
+        }
     }
+
+    if (!success)
+        g_printerr("Failed to extract icon from AppImage\n");
 
     g_free(input);
     g_free(output);
-    return EXIT_SUCCESS;
+    return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }

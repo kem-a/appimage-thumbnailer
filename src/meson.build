@@ -1,5 +1,5 @@
 executable('appimage-thumbnailer',
-  'main.c',
+  'appimage-thumbnailer.c',
   dependencies: declared_deps,
   install: true
 )
