@@ -1,30 +1,27 @@
 # Copilot Instructions
 
-## Repo Snapshot
-- `appimage-thumbnailer` is a Bash executable invoked by the freedesktop thumbnailer interface (`appimage-thumbnailer %i %o %s`). It must exit `0` only after writing the thumbnail image to `%o`.
-- `.thumbnailer` declares MIME types (`application/vnd.appimage`, etc.) and must stay in sync with `install.sh` so the desktop caches load the right helper.
-- `install.sh`/`uninstall.sh` are the only supported deployment paths; they expect root, install dependencies via distro-specific package managers, and purge `~/.cache/thumbnails` for the invoking user.
+## Architecture Snapshot
+- Only one entrypoint ships: the Meson-built C binary `src/appimage-thumbnailer.c`, invoked as `appimage-thumbnailer <AppImage> <output.png> [size]` and expected to exit `0` only after writing `%o`.
+- `appimage-thumbnailer.thumbnailer` is the sole integration point; keep its MIME list in sync with any runtime changes because desktop shells rely on it to dispatch the helper.
+- The code wraps `7z` via `command_capture`/`extract_entry`, keeps everything in-memory, and never writes temp files—maintain that streaming contract when adding formats or tooling.
 
-## How Thumbnail Extraction Works
-- Inputs are normalized immediately with `realpath` so always pass real files, not symlinks.
-- Size is optional; missing or non-numeric values default to `256` pixels. Respect this default when adding code paths.
-- `process_icon` streams files out of the AppImage via `7z e -so` and inspects them with `file -`. SVGs route through `rsvg-convert`, PNGs through `magick ... -resize`. Keep new conversions streaming to avoid temp files.
-- Primary lookup: try `.DirIcon`, following indirections (files that contain the name of another icon). The loop stops only when an actual image is exported.
-- Fallback lookup: locate the first `.desktop` entry inside the AppImage, read its `Icon=` key, and try `<icon>.{svg,png,xpm}` plus common icon roots (`.local/share/icons`, `usr/share/icons`, `usr/share/pixmaps`). Preserve this order so the fastest paths run first.
-- The script emits actionable `stderr` messages and exits `1` if no icon is found; callers rely on this to fall back to generic icons.
+## Icon Extraction Flow
+- Every path is canonicalized (`realpath` + `g_canonicalize_filename`) before use; mirror that when accepting new inputs.
+- `parse_size_argument` clamps requested sizes to `1–4096` with a default of `256`. Respect this clamp when introducing new call-sites.
+- Resolution order lives in `main`: try `.DirIcon` first (following pointer-like text indirections via `process_entry_following_symlinks` up to `MAX_SYMLINK_DEPTH`), then fall back to the first root `.svg`, then `.png` discovered through `list_archive_paths`/`find_root_with_extension`.
+- SVG payloads travel through `process_svg_payload` (librsvg + Cairo). Raster payloads hit `GdkPixbufLoader` and `scale_pixbuf`, which preserve aspect ratio and only upscale when necessary. Always reuse `process_icon_payload` so both pipelines stay in sync.
 
-## Dependencies & Tooling
-- Runtime requirements: `7z`, `file`, `base64`, `magick` (ImageMagick), and `rsvg-convert`. `install.sh` maps these to distro packages (apt/dnf/pacman/zypper); add new dependencies to every branch of the installer.
-- No Meson/CMake build is needed—the repo ships plain scripts. Ignore the generated `build/` folder unless you intentionally add a compiled helper.
+## Build & Manual Test Workflow
+- Configure and build with Meson/Ninja: `meson setup build` (once) then `ninja -C build`. Install to your prefix with `sudo ninja -C build install` to drop the binary plus `.thumbnailer` under `$datadir/thumbnailers`.
+- Quick verification: `./build/appimage-thumbnailer sample.AppImage /tmp/icon.png 256` and ensure the command exits `0` only when `/tmp/icon.png` exists and is a valid PNG.
+- Desktop caches rarely refresh instantly; when validating integration, clear GNOME caches with `rm -rf ~/.cache/thumbnails/*` before reopening Nautilus.
 
-## Daily Workflows
-- Local test without installing: `./appimage-thumbnailer sample.AppImage /tmp/icon.png 128` then open the PNG; ensure the command exits `0`.
-- Integration smoke test after code changes: run `sudo ./install.sh`, open a file manager pointed at a folder of AppImages, and confirm thumbnails refresh (or clear caches with `rm -rf ~/.cache/thumbnails/*`).
-- Uninstall via `sudo ./uninstall.sh` before packaging or when validating installer idempotency.
+## Dependencies & External Tools
+- Runtime requires `7z` plus the libraries declared in `meson.build`: GLib/GIO (2.56+), GdkPixbuf (2.42+), librsvg (2.54+), Cairo, and libm (optional). If you add more, update both the top-level `meson.build` and `README.md`.
+- The helper does not ship installer scripts in this branch; assume Meson-based deployment when documenting or automating setup steps.
 
-## Conventions & Gotchas
-- Stay POSIX-friendly but the script already depends on Bash-only features (arrays, `[[ ]]`); keep new logic Bash-compatible.
-- Avoid temporary files; the current approach keeps everything in pipes for speed and for AppImages mounted on slow media.
-- Do not attempt to support zstd-compressed AppImages inside this script (see README); document that limitation in commit messages when relevant.
-- Any new heuristics should follow the current "try fast path, short-circuit on success" model, and must call `process_icon` so conversions stay centralized.
-- When touching installer logic, remember it always runs under sudo and should keep prompting the user before package installs.
+## Implementation Conventions
+- Error handling is user-facing: log actionable messages with `g_printerr` and propagate failures all the way to `main` so desktop environments can fall back cleanly.
+- Keep archive operations streaming—`command_capture` already drains stdout to memory; avoid commands that would require seeking inside the AppImage.
+- Respect the pointer guardrails in `is_pointer_candidate`/`MAX_SYMLINK_DEPTH` to prevent infinite loops when chasing `.DirIcon` indirections.
+- When adding heuristics for locating icons, short-circuit as soon as a thumbnail succeeds and consider updating both the `.DirIcon` fast path and the root extension scan to keep behavior predictable.
