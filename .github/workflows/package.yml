@@ -92,8 +92,22 @@ jobs:
             -C "$DESTDIR" usr
           cp build/meson-dist/* "$PACKAGE_DIR"
 
-      - name: Upload artifacts
+      - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: appimage-thumbnailer-${{ steps.meta.outputs.version }}
-          path: packages/
+          name: appimage-thumbnailer-deb-${{ steps.meta.outputs.version }}
+          path: packages/appimage-thumbnailer_${{ steps.meta.outputs.version }}_amd64.deb
+          if-no-files-found: error
+
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-thumbnailer-rpm-${{ steps.meta.outputs.version }}
+          path: packages/appimage-thumbnailer-${{ steps.meta.outputs.version }}-1.x86_64.rpm
+          if-no-files-found: error
+
+      - name: Upload source archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-thumbnailer-source-${{ steps.meta.outputs.version }}
+          path: packages/*.tar.*
