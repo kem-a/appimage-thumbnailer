@@ -17,7 +17,9 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 
 ## Prerequisites
 - Tooling: `meson` (>=0.59) and `ninja` for builds.
-- Runtime: `7z` plus GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
+- Runtime (packages not installed everywhere by default):
+	- `7z`/`p7zip-full` for streaming archive reads.
+- Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
 
 ## Build & Install
