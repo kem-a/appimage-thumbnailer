@@ -1,56 +1,43 @@
 # AppImage Thumbnailer
 
-A simple and efficient thumbnailer for AppImage files that extracts and displays icons as thumbnails in file managers.
+An in-process thumbnailer that extracts AppImage icons and writes ready-to-use PNG thumbnails for desktop environments implementing the freedesktop.org spec.
 
 ## Features
+- Resolves `.DirIcon` pointers (with bounded symlink depth) before falling back to the first root-level `.svg` and then `.png` inside the AppImage.
+- Streams archive data directly from `7z` into librsvg/GdkPixbuf without temporary files.
+- Preserves aspect ratio, never upscales unnecessarily, and honors requested sizes inside the safe `1–4096` range (default `256`).
+- Ships `appimage-thumbnailer.thumbnailer` so file managers can dispatch the helper automatically once installed.
 
-- Extracts icon from AppImage files
-- Supports PNG and SVG icon formats
-- Automatically resizes thumbnails to requested size
-- Integrates with system file managers
-- Supports zstd compressed AppImage files (use [appimageinfo](https://github.com/kem-a/appimageinfo) to check)
+## Prerequisites
+- Tooling: `meson` (>=0.59) and `ninja` for builds.
+- Runtime: `7z` plus GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
+- Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
 
-## Requirements
-
-- `7z` (p7zip)
-- `ImageMagick`
-- `rsvg-convert`
-- `base64`
-
-## Installation
-
-1. Clone this repository:
+## Build & Install
 ```bash
-git clone https://github.com/kem-a/appimage-thumbnailer &&
+git clone https://github.com/kem-a/appimage-thumbnailer.git
 cd appimage-thumbnailer
+meson setup build
+ninja -C build
+sudo ninja -C build install
 ```
-2. Install the thumbnailer:
-```bash
-chmod +x install.sh && sudo sh install.sh
-```
+Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.thumbnailer` descriptor under your Meson `prefix` (default `/usr/local`).
 
-## Uninstallation
-To remove the thumbnailer:
-```bash
-chmod +x uninstall.sh && sudo sh uninstall.sh
-```
+Uninstall with `sudo ninja -C build uninstall` using the same build directory.
 
-## Clean thumbnail cache
-To clean the thumbnailer cache in GNOME:
+## Testing
+Run the helper manually to test before wiring into a desktop:
+```bash
+./build/appimage-thumbnailer Sample.AppImage /tmp/icon.png 256
+```
+- Argument order is `<AppImage> <output.png> [size]`.
+- The command exits `0` only after writing a valid PNG to `%o`; failures emit diagnostics on stderr so file managers can fall back to generic icons.
+
+## File Manager Integration
+Installing via Meson registers the `.thumbnailer` file automatically. If icons do not refresh immediately, clear cached entries and reopen your file manager:
 ```bash
 rm -rf ~/.cache/thumbnails/*
 ```
-This removes all thumbnails from your cache directory.
-
-
-## How It Works
-The thumbnailer extracts the icon from AppImage files using 7zip, converts it to the appropriate size using ImageMagick, and saves it as a thumbnail that your file manager can display.
-
-## File Manager Integration
-The thumbnailer is automatically integrated with file managers that support the freedesktop.org thumbnail specification through the installed .thumbnailer file in thumbnailers.
 
 ## License
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
+This project is licensed under the MIT License. See `LICENSE` for details.
