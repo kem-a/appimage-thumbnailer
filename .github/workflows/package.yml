@@ -46,10 +46,6 @@ jobs:
         shell: bash
         run: meson test -C build
 
-      - name: Create source archive
-        shell: bash
-        run: meson dist -C build
-
       - name: Stage install tree
         shell: bash
         run: |
@@ -90,24 +86,10 @@ jobs:
             --url "https://github.com/kem-a/appimage-thumbnailer" \
             -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.x86_64.rpm" \
             -C "$DESTDIR" usr
-          cp build/meson-dist/* "$PACKAGE_DIR"
-
-      - name: Upload Debian package
-        uses: actions/upload-artifact@v4
+      - name: Upload release packages
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
-          name: appimage-thumbnailer-deb-${{ steps.meta.outputs.version }}
-          path: packages/appimage-thumbnailer_${{ steps.meta.outputs.version }}_amd64.deb
-          if-no-files-found: error
-
-      - name: Upload RPM package
-        uses: actions/upload-artifact@v4
-        with:
-          name: appimage-thumbnailer-rpm-${{ steps.meta.outputs.version }}
-          path: packages/appimage-thumbnailer-${{ steps.meta.outputs.version }}-1.x86_64.rpm
-          if-no-files-found: error
-
-      - name: Upload source archives
-        uses: actions/upload-artifact@v4
-        with:
-          name: appimage-thumbnailer-source-${{ steps.meta.outputs.version }}
-          path: packages/*.tar.*
+          files: |
+            packages/appimage-thumbnailer_${{ steps.meta.outputs.version }}_amd64.deb
+            packages/appimage-thumbnailer-${{ steps.meta.outputs.version }}-1.x86_64.rpm
