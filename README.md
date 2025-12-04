@@ -9,6 +9,9 @@
 
 An in-process thumbnailer that extracts AppImage icons and writes ready-to-use PNG thumbnails for desktop environments implementing the freedesktop.org spec.
 
+<img width="815" height="480" alt="Screenshot From 2025-12-05 00-38-50" src="https://github.com/user-attachments/assets/d5a99e85-71d3-47dd-9174-fc0c56e43d13" />
+
+
 ## Features
 - Resolves `.DirIcon` pointers (with bounded symlink depth) before falling back to the first root-level `.svg` and then `.png` inside the AppImage.
 - Streams archive data directly from `7z` into librsvg/GdkPixbuf without temporary files.
