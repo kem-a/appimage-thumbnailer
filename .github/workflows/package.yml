@@ -1,0 +1,99 @@
+name: Build and Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build and packaging dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson \
+            ninja-build \
+            pkg-config \
+            gcc \
+            build-essential \
+            libglib2.0-dev \
+            libgdk-pixbuf-2.0-dev \
+            librsvg2-dev \
+            libcairo2-dev \
+            jq \
+            ruby \
+            ruby-dev \
+            rpm \
+            p7zip-full
+          sudo gem install --no-document fpm
+
+      - name: Configure
+        shell: bash
+        run: meson setup build --prefix=/usr
+
+      - name: Build
+        shell: bash
+        run: ninja -C build
+
+      - name: Run tests
+        shell: bash
+        run: meson test -C build
+
+      - name: Create source archive
+        shell: bash
+        run: meson dist -C build
+
+      - name: Stage install tree
+        shell: bash
+        run: |
+          DESTDIR="$GITHUB_WORKSPACE/dist-root"
+          rm -rf "$DESTDIR"
+          mkdir -p "$DESTDIR"
+          meson install -C build --destdir "$DESTDIR"
+
+      - name: Capture project version
+        id: meta
+        shell: bash
+        run: |
+          VERSION=$(meson introspect build --projectinfo | jq -r '.version')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build DEB and RPM packages
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          DESTDIR="$GITHUB_WORKSPACE/dist-root"
+          PACKAGE_DIR="$GITHUB_WORKSPACE/packages"
+          mkdir -p "$PACKAGE_DIR"
+          fpm -s dir -t deb -n appimage-thumbnailer \
+            -v "$VERSION" \
+            --architecture amd64 \
+            --description "In-process AppImage thumbnailer" \
+            --license MIT \
+            --url "https://github.com/kem-a/appimage-thumbnailer" \
+            -C "$DESTDIR" usr \
+            -p "$PACKAGE_DIR/appimage-thumbnailer_${VERSION}_amd64.deb"
+          fpm -s dir -t rpm -n appimage-thumbnailer \
+            -v "$VERSION" \
+            --architecture x86_64 \
+            --description "In-process AppImage thumbnailer" \
+            --license MIT \
+            --url "https://github.com/kem-a/appimage-thumbnailer" \
+            -C "$DESTDIR" usr \
+            -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.x86_64.rpm"
+          cp build/meson-dist/* "$PACKAGE_DIR"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-thumbnailer-${{ steps.meta.outputs.version }}
+          path: packages/
