@@ -80,16 +80,16 @@ jobs:
             --description "In-process AppImage thumbnailer" \
             --license MIT \
             --url "https://github.com/kem-a/appimage-thumbnailer" \
-            -C "$DESTDIR" usr \
-            -p "$PACKAGE_DIR/appimage-thumbnailer_${VERSION}_amd64.deb"
+            -p "$PACKAGE_DIR/appimage-thumbnailer_${VERSION}_amd64.deb" \
+            -C "$DESTDIR" usr
           fpm -s dir -t rpm -n appimage-thumbnailer \
             -v "$VERSION" \
             --architecture x86_64 \
             --description "In-process AppImage thumbnailer" \
             --license MIT \
             --url "https://github.com/kem-a/appimage-thumbnailer" \
-            -C "$DESTDIR" usr \
-            -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.x86_64.rpm"
+            -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.x86_64.rpm" \
+            -C "$DESTDIR" usr
           cp build/meson-dist/* "$PACKAGE_DIR"
 
       - name: Upload artifacts
