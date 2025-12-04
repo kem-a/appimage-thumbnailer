@@ -1,3 +1,10 @@
+<!-- Core project info -->
+[![Download](https://img.shields.io/badge/Download-latest-blue)](https://github.com/kem-a/appimage-thumbnailer/releases/latest)
+[![Release](https://img.shields.io/github/v/release/kem-a/appimage-thumbnailer?semver)](https://github.com/kem-a/appimage-thumbnailer/releases/latest)
+[![License](https://img.shields.io/github/license/kem-a/appimage-thumbnailer)](https://github.com/kem-a/appimage-thumbnailer/blob/main/LICENSE)
+![C](https://img.shields.io/badge/C-17-blue?logo=c)
+[![Stars](https://img.shields.io/github/stars/kem-a/appimage-thumbnailer?style=social)](https://github.com/kem-a/appimage-thumbnailer/stargazers)
+
 # AppImage Thumbnailer
 
 An in-process thumbnailer that extracts AppImage icons and writes ready-to-use PNG thumbnails for desktop environments implementing the freedesktop.org spec.
