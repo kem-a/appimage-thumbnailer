@@ -5,6 +5,8 @@
 ![C](https://img.shields.io/badge/C-17-blue)
 [![Stars](https://img.shields.io/github/stars/kem-a/appimage-thumbnailer?style=social)](https://github.com/kem-a/appimage-thumbnailer/stargazers)
 
+[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kem-a/appimage-thumbnailer/main/badge-downloads.json)](https://github.com/kem-a/appimage-thumbnailer/releases)
+
 # AppImage Thumbnailer
 
 An in-process thumbnailer that extracts AppImage icons and writes ready-to-use PNG thumbnails for desktop environments implementing the freedesktop.org spec.
