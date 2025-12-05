@@ -5,7 +5,6 @@
 ![C](https://img.shields.io/badge/C-17-blue)
 [![Stars](https://img.shields.io/github/stars/kem-a/appimage-thumbnailer?style=social)](https://github.com/kem-a/appimage-thumbnailer/stargazers)
 
-[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kem-a/appimage-thumbnailer/main/badge-downloads.json)](https://github.com/kem-a/appimage-thumbnailer/releases)
 
 # AppImage Thumbnailer
 
