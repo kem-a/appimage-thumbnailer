@@ -36,7 +36,15 @@ sudo ninja -C build install
 ```
 Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.thumbnailer` descriptor under your Meson `prefix` (default `/usr/local`).
 
-Uninstall with `sudo ninja -C build uninstall` using the same build directory.
+### Install into your home directory (no sudo)
+Meson respects any prefix, so you can keep everything under `~/.local`:
+```bash
+meson setup build --prefix=$HOME/.local
+meson install -C build
+```
+`TryExec`/`Exec` in the installed `.thumbnailer` point directly at the chosen prefix (e.g., `/home/you/.local/bin/appimage-thumbnailer`), so desktop shells will find the helper even if `~/.local/bin` is not on `PATH`.
+
+Uninstall with `ninja -C build uninstall` (add `sudo` if you installed system-wide) using the same build directory.
 
 ## Testing
 Run the helper manually to test before wiring into a desktop:

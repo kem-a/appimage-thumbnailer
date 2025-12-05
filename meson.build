@@ -18,6 +18,17 @@ endif
 
 subdir('src')
 
-install_data('appimage-thumbnailer.thumbnailer',
+thumbnailer_conf = configuration_data()
+thumbnailer_binary = join_paths(get_option('prefix'), get_option('bindir'), 'appimage-thumbnailer')
+thumbnailer_conf.set('EXEC_PATH', thumbnailer_binary)
+thumbnailer_conf.set('TRYEXEC_PATH', thumbnailer_binary)
+
+thumbnailer_file = configure_file(
+  input: 'appimage-thumbnailer.thumbnailer.in',
+  output: 'appimage-thumbnailer.thumbnailer',
+  configuration: thumbnailer_conf
+)
+
+install_data(thumbnailer_file,
   install_dir: join_paths(get_option('datadir'), 'thumbnailers')
 )
