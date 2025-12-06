@@ -302,6 +302,15 @@ scale_pixbuf(GdkPixbuf *pixbuf, int size)
 static gboolean
 process_icon_payload(const guchar *data, gsize len, const char *out_path, int size)
 {
+    static gboolean empty_payload_warned = FALSE;
+    if (!data || len == 0) {
+        if (!empty_payload_warned) {
+            g_printerr("Icon payload is empty or missing\n");
+            empty_payload_warned = TRUE;
+        }
+        return FALSE;
+    }
+
     if (payload_is_svg(data, len)) {
         if (process_svg_payload(data, len, out_path, size))
             return TRUE;
