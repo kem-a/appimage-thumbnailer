@@ -1,5 +1,5 @@
 project('appimage-thumbnailer', 'c',
-  version: '2.0.2',
+  version: 'v2.0.2',
   default_options: ['warning_level=3', 'c_std=c11']
 )
 
@@ -10,6 +10,10 @@ gdk_pixbuf_dep = dependency('gdk-pixbuf-2.0', version: '>=2.42')
 librsvg_dep = dependency('librsvg-2.0', version: '>=2.54')
 cairo_dep = dependency('cairo')
 m_dep = cc.find_library('m', required: false)
+
+add_project_arguments('-DAPPIMAGE_THUMBNAILER_VERSION="@0@"'.format(meson.project_version()),
+  language: 'c'
+)
 
 declared_deps = [glib_dep, gio_dep, gdk_pixbuf_dep, librsvg_dep, cairo_dep]
 if m_dep.found()

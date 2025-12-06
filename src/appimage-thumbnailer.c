@@ -21,6 +21,10 @@
 #define MAX_SYMLINK_DEPTH 5
 #define POINTER_TEXT_LIMIT 1024
 
+#ifndef APPIMAGE_THUMBNAILER_VERSION
+#define APPIMAGE_THUMBNAILER_VERSION "unknown"
+#endif
+
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -439,9 +443,38 @@ parse_size_argument(const char *arg)
     return (int) value;
 }
 
+static void
+print_usage(const char *progname)
+{
+    g_print("Usage: %s <AppImage> <output.png> [size]\n", progname);
+    g_print("Extracts the AppImage icon into a PNG thumbnail (default size 256, range 1-4096).\n");
+    g_print("Follows the freedesktop.org thumbnail spec: https://specifications.freedesktop.org/thumbnail-spec/thumbnail-spec-latest.html\n");
+    g_print("Options:\n");
+    g_print("  -h, --help        Show this help message and exit\n");
+    g_print("  -V, --version     Show version information and exit\n");
+}
+
+static void
+print_version(void)
+{
+    g_print("appimage-thumbnailer %s\n", APPIMAGE_THUMBNAILER_VERSION);
+}
+
 int
 main(int argc, char **argv)
 {
+    if (argc == 2) {
+        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+            print_usage(argv[0]);
+            return EXIT_SUCCESS;
+        }
+
+        if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0) {
+            print_version();
+            return EXIT_SUCCESS;
+        }
+    }
+
     if (argc < 3 || argc > 4) {
         g_printerr("Usage: %s <AppImage> <output.png> [size]\n", argv[0]);
         return EXIT_FAILURE;
