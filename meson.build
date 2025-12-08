@@ -1,5 +1,5 @@
 project('appimage-thumbnailer', 'c',
-  version: 'v2.0.2',
+  version: 'v2.1.0',
   default_options: ['warning_level=3', 'c_std=c11']
 )
 
@@ -20,7 +20,46 @@ if m_dep.found()
   declared_deps += m_dep
 endif
 
+# DwarFS tools configuration
+dwarfs_version = '0.14.1'
+dwarfs_tools_dir = get_option('prefix') / get_option('libdir') / 'appimage-thumbnailer'
+
+# Map host CPU to DwarFS release naming
+host_cpu = host_machine.cpu_family()
+dwarfs_arch_map = {
+  'x86_64': 'x86_64',
+  'aarch64': 'aarch64',
+  'arm': 'arm',
+  'x86': 'i386',
+  'ppc64': 'ppc64',
+  'ppc64le': 'ppc64le',
+  'riscv64': 'riscv64',
+  's390x': 's390x',
+}
+
+dwarfs_arch = dwarfs_arch_map.get(host_cpu, '')
+
+# Option to skip bundling dwarfs tools (for distro packaging)
+bundle_dwarfs = get_option('bundle_dwarfs')
+
 subdir('src')
+
+# Install bundled DwarFS tools if enabled and architecture is supported
+if bundle_dwarfs and dwarfs_arch != ''
+  fetch_script = files('scripts/fetch-dwarfs-tools.sh')
+  
+  # Custom target to download and extract dwarfs tools during build
+  dwarfs_tools = custom_target('dwarfs-tools',
+    output: ['dwarfsextract', 'dwarfsck'],
+    command: [
+      'sh', fetch_script, dwarfs_version, dwarfs_arch, meson.current_build_dir()
+    ],
+    install: true,
+    install_dir: dwarfs_tools_dir
+  )
+elif bundle_dwarfs and dwarfs_arch == ''
+  warning('DwarFS tools bundling requested but architecture "@0@" is not supported'.format(host_cpu))
+endif
 
 thumbnailer_conf = configuration_data()
 thumbnailer_binary = join_paths(get_option('prefix'), get_option('bindir'), 'appimage-thumbnailer')

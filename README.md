@@ -14,6 +14,7 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 
 
 ## Features
+- Supports both **SquashFS** (traditional) and **DwarFS** AppImage formats.
 - Resolves `.DirIcon` pointers (with bounded symlink depth) before falling back to the first root-level `.svg` and then `.png` inside the AppImage.
 - Streams archive data directly from `7z` into librsvg/GdkPixbuf without temporary files.
 - Preserves aspect ratio while scaling toward the requested size (upscales when the source is smaller) within the safe `1–4096` range (default `256`).
@@ -21,10 +22,19 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 
 ## Prerequisites
 - Tooling: `meson` (>=0.59) and `ninja` for builds.
-- Runtime (packages not installed everywhere by default):
-	- `7z`/`p7zip-full` for streaming archive reads.
+- Runtime (at least one required):
+	- `7z`/`p7zip-full` for SquashFS AppImages (traditional format).
+	- `dwarfs` tools (`dwarfsextract`, `dwarfsck`) for DwarFS AppImages.
 - Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
+
+### DwarFS Support
+[DwarFS](https://github.com/mhx/dwarfs) is a high-compression read-only filesystem that offers significantly better compression ratios than SquashFS. Some modern AppImages (e.g., those created with [uruntime](https://github.com/VHSgunzo/uruntime) or [PELF](https://github.com/xplshn/pelf)) use DwarFS instead of SquashFS.
+
+To enable DwarFS support, install the dwarfs package for your distribution:
+- **Arch Linux**: `pacman -S dwarfs`
+- **Ubuntu/Debian**: See [DwarFS releases](https://github.com/mhx/dwarfs/releases) for prebuilt binaries
+- **Homebrew**: `brew install dwarfs`
 
 ## Build & Install
 ```bash

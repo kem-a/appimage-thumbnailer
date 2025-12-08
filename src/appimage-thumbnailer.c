@@ -15,7 +15,10 @@
 #include <gio/gio.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <librsvg/rsvg.h>
+
+#include "dwarfs-extract.h"
 
 #define DEFAULT_THUMBNAIL_SIZE 256
 #define MAX_SYMLINK_DEPTH 5
@@ -101,7 +104,7 @@ command_capture(const char *const argv[], GByteArray **output)
 }
 
 static gboolean
-extract_entry(const char *archive, const char *entry, GByteArray **output)
+extract_entry_7z(const char *archive, const char *entry, GByteArray **output)
 {
     if (!archive || !entry || *entry == '\0')
         return FALSE;
@@ -115,11 +118,41 @@ extract_entry(const char *archive, const char *entry, GByteArray **output)
     const char *argv[] = {"7z", "e", "-so", archive, clean_entry, NULL};
     gboolean ok = command_capture(argv, output);
     g_free(clean_entry);
+
+    /* 7z may return success (exit 0) but produce no output for unsupported formats.
+     * Treat empty output as failure so we can fall back to other extractors. */
+    if (ok && (*output == NULL || (*output)->len == 0)) {
+        if (*output) {
+            g_byte_array_unref(*output);
+            *output = NULL;
+        }
+        return FALSE;
+    }
+
     return ok;
 }
 
 static gboolean
-list_archive_paths(const char *archive, GPtrArray **paths_out)
+extract_entry(const char *archive, const char *entry, GByteArray **output)
+{
+    if (!archive || !entry || *entry == '\0')
+        return FALSE;
+
+    /* Try 7z first (works for SquashFS) */
+    if (extract_entry_7z(archive, entry, output))
+        return TRUE;
+
+    /* Fall back to dwarfsextract (for DwarFS images) */
+    if (dwarfs_tools_available()) {
+        if (dwarfs_extract_entry(archive, entry, output))
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
+list_archive_paths_7z(const char *archive, GPtrArray **paths_out)
 {
     const char *argv[] = {"7z", "l", "-slt", archive, NULL};
     GByteArray *output = NULL;
@@ -148,6 +181,22 @@ list_archive_paths(const char *archive, GPtrArray **paths_out)
 
     *paths_out = paths;
     return TRUE;
+}
+
+static gboolean
+list_archive_paths(const char *archive, GPtrArray **paths_out)
+{
+    /* Try 7z first (works for SquashFS) */
+    if (list_archive_paths_7z(archive, paths_out))
+        return TRUE;
+
+    /* Fall back to dwarfsck (for DwarFS images) */
+    if (dwarfs_tools_available()) {
+        if (dwarfs_list_paths(archive, paths_out))
+            return TRUE;
+    }
+
+    return FALSE;
 }
 
 static gboolean
@@ -480,8 +529,12 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    if (!g_find_program_in_path("7z")) {
-        g_printerr("7z is required but not found in PATH\n");
+    gboolean have_7z = g_find_program_in_path("7z") != NULL;
+    gboolean have_dwarfs = dwarfs_tools_available();
+
+    if (!have_7z && !have_dwarfs) {
+        g_printerr("Neither 7z nor dwarfs tools (dwarfsextract, dwarfsck) found.\n");
+        g_printerr("Install p7zip for SquashFS AppImages or dwarfs for DwarFS AppImages.\n");
         return EXIT_FAILURE;
     }
 
