@@ -24,17 +24,37 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 - Tooling: `meson` (>=0.59) and `ninja` for builds.
 - Runtime (at least one required):
 	- `7z`/`p7zip-full` for SquashFS AppImages (traditional format).
-	- `dwarfs` tools (`dwarfsextract`, `dwarfsck`) for DwarFS AppImages.
+	- `dwarfs` tools (`dwarfsextract`, `dwarfsck`) for DwarFS AppImages — bundled automatically during build.
 - Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
+
+<details> <summary> Installing Dependencies <b>(click to open)</b> </summary>
+
+**Fedora / RHEL / CentOS:**
+```bash
+sudo dnf install meson ninja-build p7zip glib2-devel gdk-pixbuf2-devel librsvg2-devel cairo-devel
+```
+
+**Ubuntu / Debian:**
+```bash
+sudo apt install meson ninja-build p7zip-full libglib2.0-dev libgdk-pixbuf-2.0-dev librsvg2-dev libcairo2-dev
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S meson ninja p7zip glib2 gdk-pixbuf2 librsvg cairo
+```
+</details> 
 
 ### DwarFS Support
 [DwarFS](https://github.com/mhx/dwarfs) is a high-compression read-only filesystem that offers significantly better compression ratios than SquashFS. Some modern AppImages (e.g., those created with [uruntime](https://github.com/VHSgunzo/uruntime) or [PELF](https://github.com/xplshn/pelf)) use DwarFS instead of SquashFS.
 
-To enable DwarFS support, install the dwarfs package for your distribution:
-- **Arch Linux**: `pacman -S dwarfs`
-- **Ubuntu/Debian**: See [DwarFS releases](https://github.com/mhx/dwarfs/releases) for prebuilt binaries
-- **Homebrew**: `brew install dwarfs`
+**DwarFS tools are bundled automatically** during the build process — static binaries (`dwarfsextract`, `dwarfsck`) are downloaded from the [official releases](https://github.com/mhx/dwarfs/releases) and installed alongside the thumbnailer. No additional installation is required.
+
+To disable bundling (e.g., for distro packaging where you want to use system-provided dwarfs):
+```bash
+meson setup build -Dbundle_dwarfs=false
+```
 
 ## Build & Install
 ```bash
