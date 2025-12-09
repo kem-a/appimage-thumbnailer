@@ -115,7 +115,9 @@ extract_entry_7z(const char *archive, const char *entry, GByteArray **output)
     else
         clean_entry = g_strdup(entry);
 
-    const char *argv[] = {"7z", "e", "-so", archive, clean_entry, NULL};
+    /* Use -tSquashFS to force correct format detection for AppImages with multiple
+     * compression types (e.g., zstd-compressed ELF header + SquashFS payload) */
+    const char *argv[] = {"7z", "e", "-so", "-tSquashFS", archive, clean_entry, NULL};
     gboolean ok = command_capture(argv, output);
     g_free(clean_entry);
 
@@ -154,7 +156,9 @@ extract_entry(const char *archive, const char *entry, GByteArray **output)
 static gboolean
 list_archive_paths_7z(const char *archive, GPtrArray **paths_out)
 {
-    const char *argv[] = {"7z", "l", "-slt", archive, NULL};
+    /* Use -tSquashFS to force correct format detection for AppImages with multiple
+     * compression types (e.g., zstd-compressed ELF header + SquashFS payload) */
+    const char *argv[] = {"7z", "l", "-slt", "-tSquashFS", archive, NULL};
     GByteArray *output = NULL;
     if (!command_capture(argv, &output))
         return FALSE;

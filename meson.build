@@ -1,5 +1,5 @@
 project('appimage-thumbnailer', 'c',
-  version: 'v2.1.0',
+  version: 'v2.1.1',
   default_options: ['warning_level=3', 'c_std=c11']
 )
 
