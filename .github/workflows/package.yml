@@ -25,15 +25,21 @@ jobs:
             pkg-config \
             gcc \
             build-essential \
+            git \
+            curl \
             libglib2.0-dev \
             libgdk-pixbuf-2.0-dev \
             librsvg2-dev \
             libcairo2-dev \
+            zlib1g-dev \
+            liblzma-dev \
+            liblzo2-dev \
+            liblz4-dev \
+            libzstd-dev \
             jq \
             ruby \
             ruby-dev \
-            rpm \
-            p7zip-full
+            rpm
           sudo gem install --no-document fpm
 
       - name: Configure

@@ -1,5 +1,1 @@
-option('bundle_dwarfs',
-  type: 'boolean',
-  value: true,
-  description: 'Bundle DwarFS tools (dwarfsextract, dwarfsck) for DwarFS AppImage support'
-)
+## No user-configurable Meson options currently.

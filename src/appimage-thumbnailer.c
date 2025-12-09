@@ -19,6 +19,7 @@
 #include <librsvg/rsvg.h>
 
 #include "dwarfs-extract.h"
+#include "squashfs-extract.h"
 
 #define DEFAULT_THUMBNAIL_SIZE 256
 #define MAX_SYMLINK_DEPTH 5
@@ -37,109 +38,13 @@
 #endif
 
 static gboolean
-command_capture(const char *const argv[], GByteArray **output)
-{
-    int pipe_fd[2];
-    if (pipe(pipe_fd) != 0) {
-        g_printerr("Failed to create pipe: %s\n", g_strerror(errno));
-        return FALSE;
-    }
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        g_printerr("Failed to fork: %s\n", g_strerror(errno));
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return FALSE;
-    }
-
-    if (pid == 0) {
-        close(pipe_fd[0]);
-        if (dup2(pipe_fd[1], STDOUT_FILENO) < 0) {
-            _exit(127);
-        }
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull >= 0) {
-            dup2(devnull, STDERR_FILENO);
-            close(devnull);
-        }
-        execvp(argv[0], (char *const *) argv);
-        _exit(127);
-    }
-
-    close(pipe_fd[1]);
-    GByteArray *arr = g_byte_array_new();
-    guchar buffer[8192];
-    ssize_t bytes_read;
-
-    while ((bytes_read = read(pipe_fd[0], buffer, sizeof buffer)) != 0) {
-        if (bytes_read < 0) {
-            if (errno == EINTR)
-                continue;
-            g_printerr("Failed to read command output: %s\n", g_strerror(errno));
-            g_byte_array_unref(arr);
-            close(pipe_fd[0]);
-            waitpid(pid, NULL, 0);
-            return FALSE;
-        }
-        g_byte_array_append(arr, buffer, (guint) bytes_read);
-    }
-
-    close(pipe_fd[0]);
-
-    int status = 0;
-    if (waitpid(pid, &status, 0) < 0) {
-        g_printerr("Failed to wait for command: %s\n", g_strerror(errno));
-        g_byte_array_unref(arr);
-        return FALSE;
-    }
-
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        g_byte_array_unref(arr);
-        return FALSE;
-    }
-
-    *output = arr;
-    return TRUE;
-}
-
-static gboolean
-extract_entry_7z(const char *archive, const char *entry, GByteArray **output)
-{
-    if (!archive || !entry || *entry == '\0')
-        return FALSE;
-
-    gchar *clean_entry = NULL;
-    if (entry[0] == '/')
-        clean_entry = g_strdup(entry + 1);
-    else
-        clean_entry = g_strdup(entry);
-
-    const char *argv[] = {"7z", "e", "-so", archive, clean_entry, NULL};
-    gboolean ok = command_capture(argv, output);
-    g_free(clean_entry);
-
-    /* 7z may return success (exit 0) but produce no output for unsupported formats.
-     * Treat empty output as failure so we can fall back to other extractors. */
-    if (ok && (*output == NULL || (*output)->len == 0)) {
-        if (*output) {
-            g_byte_array_unref(*output);
-            *output = NULL;
-        }
-        return FALSE;
-    }
-
-    return ok;
-}
-
-static gboolean
 extract_entry(const char *archive, const char *entry, GByteArray **output)
 {
     if (!archive || !entry || *entry == '\0')
         return FALSE;
 
-    /* Try 7z first (works for SquashFS) */
-    if (extract_entry_7z(archive, entry, output))
+    /* Prefer SquashFS via unsquashfs, then fall back to DwarFS */
+    if (squashfs_extract_entry(archive, entry, output))
         return TRUE;
 
     /* Fall back to dwarfsextract (for DwarFS images) */
@@ -152,42 +57,10 @@ extract_entry(const char *archive, const char *entry, GByteArray **output)
 }
 
 static gboolean
-list_archive_paths_7z(const char *archive, GPtrArray **paths_out)
-{
-    const char *argv[] = {"7z", "l", "-slt", archive, NULL};
-    GByteArray *output = NULL;
-    if (!command_capture(argv, &output))
-        return FALSE;
-
-    GPtrArray *paths = g_ptr_array_new_with_free_func(g_free);
-    gchar **lines = g_strsplit((const gchar *) output->data, "\n", -1);
-    for (gint i = 0; lines[i] != NULL; ++i) {
-        gchar *line = g_strstrip(lines[i]);
-        if (g_str_has_prefix(line, "Path = ")) {
-            const gchar *path = line + 7;
-            if (*path != '\0') {
-                gchar *normalized = g_strdup(path[0] == '/' ? path + 1 : path);
-                g_ptr_array_add(paths, normalized);
-            }
-        }
-    }
-    g_strfreev(lines);
-    g_byte_array_unref(output);
-
-    if (paths->len == 0) {
-        g_ptr_array_unref(paths);
-        return FALSE;
-    }
-
-    *paths_out = paths;
-    return TRUE;
-}
-
-static gboolean
 list_archive_paths(const char *archive, GPtrArray **paths_out)
 {
-    /* Try 7z first (works for SquashFS) */
-    if (list_archive_paths_7z(archive, paths_out))
+    /* Prefer SquashFS via unsquashfs, then fall back to DwarFS */
+    if (squashfs_list_paths(archive, paths_out))
         return TRUE;
 
     /* Fall back to dwarfsck (for DwarFS images) */
@@ -529,12 +402,12 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    gboolean have_7z = g_find_program_in_path("7z") != NULL;
+    gboolean have_sqfs = squashfs_tools_available();
     gboolean have_dwarfs = dwarfs_tools_available();
 
-    if (!have_7z && !have_dwarfs) {
-        g_printerr("Neither 7z nor dwarfs tools (dwarfsextract, dwarfsck) found.\n");
-        g_printerr("Install p7zip for SquashFS AppImages or dwarfs for DwarFS AppImages.\n");
+    if (!have_sqfs && !have_dwarfs) {
+        g_printerr("Neither unsquashfs nor DwarFS tools (dwarfsextract, dwarfsck) found.\n");
+        g_printerr("Install squashfs-tools or ensure bundled tools are present.\n");
         return EXIT_FAILURE;
     }
 

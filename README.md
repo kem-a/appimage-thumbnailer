@@ -16,15 +16,15 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 ## Features
 - Supports both **SquashFS** (traditional) and **DwarFS** AppImage formats.
 - Resolves `.DirIcon` pointers (with bounded symlink depth) before falling back to the first root-level `.svg` and then `.png` inside the AppImage.
-- Streams archive data directly from `7z` into librsvg/GdkPixbuf without temporary files.
+- Streams archive data directly from bundled `unsquashfs`/`dwarfsextract` into librsvg/GdkPixbuf without temporary files.
 - Preserves aspect ratio while scaling toward the requested size (upscales when the source is smaller) within the safe `1–4096` range (default `256`).
 - Ships `appimage-thumbnailer.thumbnailer` so file managers can dispatch the helper automatically once installed.
 
 ## Prerequisites
 - Tooling: `meson` (>=0.59) and `ninja` for builds.
-- Runtime (at least one required):
-	- `7z`/`p7zip-full` for SquashFS AppImages (traditional format).
-	- `dwarfs` tools (`dwarfsextract`, `dwarfsck`) for DwarFS AppImages — bundled automatically during build.
+- Runtime: bundled tools are built and installed automatically during the build:
+	- `unsquashfs` from [`plougher/squashfs-tools`](https://github.com/plougher/squashfs-tools) for SquashFS AppImages.
+	- `dwarfsextract`/`dwarfsck` from [`mhx/dwarfs`](https://github.com/mhx/dwarfs) for DwarFS AppImages.
 - Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
 
@@ -32,29 +32,29 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 
 **Fedora / RHEL / CentOS:**
 ```bash
-sudo dnf install meson ninja-build p7zip glib2-devel gdk-pixbuf2-devel librsvg2-devel cairo-devel
+sudo dnf install meson ninja-build gcc make git curl glib2-devel gdk-pixbuf2-devel librsvg2-devel cairo-devel \
+	zlib-devel xz-devel lzo-devel lz4-devel zstd-devel
 ```
 
 **Ubuntu / Debian:**
 ```bash
-sudo apt install meson ninja-build p7zip-full libglib2.0-dev libgdk-pixbuf-2.0-dev librsvg2-dev libcairo2-dev
+sudo apt install meson ninja-build build-essential git curl libglib2.0-dev libgdk-pixbuf-2.0-dev librsvg2-dev libcairo2-dev \
+	zlib1g-dev liblzma-dev liblzo2-dev liblz4-dev libzstd-dev
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -S meson ninja p7zip glib2 gdk-pixbuf2 librsvg cairo
+sudo pacman -S meson ninja base-devel git curl glib2 gdk-pixbuf2 librsvg cairo zlib xz lzo lz4 zstd
 ```
 </details> 
 
 ### DwarFS Support
 [DwarFS](https://github.com/mhx/dwarfs) is a high-compression read-only filesystem that offers significantly better compression ratios than SquashFS. Some modern AppImages (e.g., those created with [uruntime](https://github.com/VHSgunzo/uruntime) or [PELF](https://github.com/xplshn/pelf)) use DwarFS instead of SquashFS.
 
-**DwarFS tools are bundled automatically** during the build process — static binaries (`dwarfsextract`, `dwarfsck`) are downloaded from the [official releases](https://github.com/mhx/dwarfs/releases) and installed alongside the thumbnailer. No additional installation is required.
+**DwarFS tools are bundled automatically** during the build process — static binaries (`dwarfsextract`, `dwarfsck`) are downloaded from the [official releases](https://github.com/mhx/dwarfs/releases) and installed alongside the thumbnailer. No additional installation is required and bundling cannot be disabled in this branch.
 
-To disable bundling (e.g., for distro packaging where you want to use system-provided dwarfs):
-```bash
-meson setup build -Dbundle_dwarfs=false
-```
+### SquashFS Support
+SquashFS AppImages are handled via `unsquashfs` from the upstream [`squashfs-tools`](https://github.com/plougher/squashfs-tools) project. The build fetches and compiles `unsquashfs` automatically and installs it with the thumbnailer, so you don't need system `p7zip` or other helpers. No 7z fallback is used.
 
 ## Build & Install
 ```bash
