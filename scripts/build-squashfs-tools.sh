@@ -29,8 +29,16 @@ if [ ! -d "$BUILD_SUBDIR" ]; then
     exit 1
 fi
 
-echo "Building unsquashfs..."
-make -C "$BUILD_SUBDIR" unsquashfs -j"$(getconf _NPROCESSORS_ONLN || echo 1)"
+echo "Building unsquashfs with all compression support..."
+# Enable all compression formats for maximum AppImage compatibility
+make -C "$BUILD_SUBDIR" unsquashfs \
+    GZIP_SUPPORT=1 \
+    XZ_SUPPORT=1 \
+    LZO_SUPPORT=1 \
+    LZ4_SUPPORT=1 \
+    ZSTD_SUPPORT=1 \
+    LZMA_XZ_SUPPORT=1 \
+    -j"$(getconf _NPROCESSORS_ONLN || echo 1)"
 
 # Copy resulting binary to output directory root for Meson to pick up
 cp "$BUILD_SUBDIR/unsquashfs" "$OUTPUT_DIR/unsquashfs"

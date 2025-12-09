@@ -25,6 +25,23 @@
 
 #define SQFS_MAGIC "hsqs"
 #define SQFS_MAGIC_LEN 4
+#define SQFS_SUPERBLOCK_SIZE 96
+
+/* SquashFS superblock structure (minimal fields for validation) */
+struct squashfs_super_block {
+    uint32_t s_magic;
+    uint32_t inodes;
+    uint32_t mkfs_time;
+    uint32_t block_size;
+    uint32_t fragments;
+    uint16_t compression;
+    uint16_t block_log;
+    uint16_t flags;
+    uint16_t no_ids;
+    uint16_t s_major;
+    uint16_t s_minor;
+    /* ... rest not needed for validation */
+} __attribute__((packed));
 
 static gchar *unsquashfs_path = NULL;
 static gboolean tools_checked = FALSE;
@@ -62,6 +79,39 @@ squashfs_tools_available(void)
     return tools_available_cached;
 }
 
+static gboolean
+validate_squashfs_superblock(int fd, off_t offset)
+{
+    struct squashfs_super_block sb;
+    
+    /* Use pread to avoid changing file position */
+    if (pread(fd, &sb, sizeof(sb), offset) != sizeof(sb))
+        return FALSE;
+    
+    /* Check magic */
+    if (memcmp(&sb.s_magic, SQFS_MAGIC, SQFS_MAGIC_LEN) != 0)
+        return FALSE;
+    
+    /* Basic sanity checks on superblock fields */
+    /* Block size should be a power of 2 between 4KB and 1MB */
+    if (sb.block_size < 4096 || sb.block_size > 1048576)
+        return FALSE;
+    
+    /* Check if block_size is a power of 2 */
+    if ((sb.block_size & (sb.block_size - 1)) != 0)
+        return FALSE;
+    
+    /* Major version should be 4 (current SquashFS) */
+    if (sb.s_major != 4)
+        return FALSE;
+    
+    /* Compression type should be valid (0-8 are known types) */
+    if (sb.compression > 8)
+        return FALSE;
+    
+    return TRUE;
+}
+
 static off_t
 find_squashfs_offset(const char *archive)
 {
@@ -81,15 +131,21 @@ find_squashfs_offset(const char *archive)
             memcpy(tmp, carry, carry_len);
             memcpy(tmp + carry_len, buf, SQFS_MAGIC_LEN - carry_len);
             if (memcmp(tmp, SQFS_MAGIC, SQFS_MAGIC_LEN) == 0) {
-                close(fd);
-                return offset - (off_t) carry_len;
+                off_t candidate = offset - (off_t) carry_len;
+                if (validate_squashfs_superblock(fd, candidate)) {
+                    close(fd);
+                    return candidate;
+                }
             }
         }
 
         for (ssize_t i = 0; i + SQFS_MAGIC_LEN <= r; ++i) {
             if (memcmp(buf + i, SQFS_MAGIC, SQFS_MAGIC_LEN) == 0) {
-                close(fd);
-                return offset + (off_t) i;
+                off_t candidate = offset + (off_t) i;
+                if (validate_squashfs_superblock(fd, candidate)) {
+                    close(fd);
+                    return candidate;
+                }
             }
         }
 

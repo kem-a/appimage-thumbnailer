@@ -33,7 +33,7 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 **Fedora / RHEL / CentOS:**
 ```bash
 sudo dnf install meson ninja-build gcc make git curl glib2-devel gdk-pixbuf2-devel librsvg2-devel cairo-devel \
-	zlib-devel xz-devel lzo-devel lz4-devel zstd-devel
+	zlib-devel xz-devel lzo-devel lz4-devel libzstd-devel
 ```
 
 **Ubuntu / Debian:**
