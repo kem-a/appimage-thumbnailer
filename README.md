@@ -21,7 +21,7 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 - Ships `appimage-thumbnailer.thumbnailer` so file managers can dispatch the helper automatically once installed.
 
 ## Prerequisites
-- Tooling: `meson` (>=0.59) and `ninja` for builds.
+- Tooling: `meson` (>=1.1) and `ninja` for builds.
 - Runtime (at least one required):
 	- `7z`/`p7zip-full` for SquashFS AppImages (traditional format).
 	- `dwarfs` tools (`dwarfsextract`, `dwarfsck`) for DwarFS AppImages — bundled automatically during build.
