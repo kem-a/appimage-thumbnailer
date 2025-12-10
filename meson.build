@@ -78,3 +78,6 @@ install_data(thumbnailer_file,
 
 # Add MIME type association during installation
 meson.add_install_script('xdg-mime', 'default', 'appimage-thumbnailer.desktop', 'application/vnd.appimage')
+
+# Clear thumbnail cache so the updated handler gets picked up immediately
+meson.add_install_script('sh', '-c', 'rm -rf ~/.cache/thumbnails/*')
