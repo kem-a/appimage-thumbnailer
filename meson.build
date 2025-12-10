@@ -75,3 +75,6 @@ thumbnailer_file = configure_file(
 install_data(thumbnailer_file,
   install_dir: join_paths(get_option('datadir'), 'thumbnailers')
 )
+
+# Add MIME type association during installation
+meson.add_install_script('xdg-mime', 'default', 'appimage-thumbnailer.desktop', 'application/vnd.appimage')
