@@ -46,7 +46,7 @@ subdir('src')
 
 # Install bundled DwarFS tools if enabled and architecture is supported
 if bundle_dwarfs and dwarfs_arch != ''
-  fetch_script = files('scripts/fetch-dwarfs-tools.sh')
+  fetch_script = files('dwarfs/fetch-dwarfs-tools.sh')
   
   # Custom target to download and extract dwarfs tools during build
   dwarfs_tools = custom_target('dwarfs-tools',
