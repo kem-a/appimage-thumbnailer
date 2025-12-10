@@ -499,18 +499,42 @@ parse_size_argument(const char *arg)
 static void
 print_usage(const char *progname)
 {
-    g_print("Usage: %s <AppImage> <output.png> [size]\n", progname);
-    g_print("Extracts the AppImage icon into a PNG thumbnail (default size 256, range 1-4096).\n");
-    g_print("Follows the freedesktop.org thumbnail spec: https://specifications.freedesktop.org/thumbnail-spec/thumbnail-spec-latest.html\n");
+    g_print("Usage: %s [OPTIONS] <APPIMAGE> <OUTPUT> [SIZE]\n", progname);
+    g_print("\n");
+    g_print("Extract the embedded icon from an AppImage and write it as a PNG thumbnail. It uses 7z and bundled DwarFS binaries to achieve this.\n");
+    g_print("\n");
+    g_print("Arguments:\n");
+    g_print("  <APPIMAGE>        Path to the AppImage file\n");
+    g_print("  <OUTPUT>          Path to the output PNG thumbnail\n");
+    g_print("  [SIZE]            Thumbnail size in pixels (default: 256, range: 1-4096)\n");
+    g_print("\n");
     g_print("Options:\n");
-    g_print("  -h, --help        Show this help message and exit\n");
-    g_print("  -V, --version     Show version information and exit\n");
+    g_print("  -h, --help        Print this help message and exit\n");
+    g_print("  -V, --version     Print version information and exit\n");
+    g_print("\n");
+    g_print("Examples:\n");
+    g_print("  %s app.AppImage thumbnail.png\n", progname);
+    g_print("  %s app.AppImage thumbnail.png 128\n", progname);
+    g_print("\n");
+    g_print("Conforms to the freedesktop.org thumbnail specification:\n");
+    g_print("  <https://specifications.freedesktop.org/thumbnail-spec/latest>\n");
+    g_print("\n");
+    g_print("License:\n");
+    g_print("  MIT License\n");
+    g_print("  Copyright (c) Arnis Kemlers\n");
+    g_print("  <https://github.com/kem-a/appimage-thumbnailer>\n");
+    g_print("\n");
+    g_print("Third-party components:\n");
+    g_print("  Includes prebuilt DwarFS binaries from <https://github.com/mhx/dwarfs>\n");
+    g_print("  DwarFS is distributed under the MIT and GPL-3.0 licenses.\n");
 }
 
 static void
 print_version(void)
 {
     g_print("appimage-thumbnailer %s\n", APPIMAGE_THUMBNAILER_VERSION);
+    g_print("Copyright (c) Arnis Kemlers\n");
+    g_print("License: MIT\n");
 }
 
 int
