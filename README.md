@@ -84,10 +84,19 @@ Run the helper manually to test before wiring into a desktop:
 - Argument order is `<AppImage> <output.png> [size]`.
 - The command exits `0` only after writing a valid PNG to `%o`; failures emit diagnostics on stderr so file managers can fall back to generic icons.
 
-## File Manager Integration
-Installing via Meson registers the `.thumbnailer` file automatically. If icons do not refresh immediately, clear cached entries and reopen your file manager:
+## Troubleshooting
+
+1. If icons do not refresh immediately, clear cached entries and reopen your file manager:
 ```bash
 rm -rf ~/.cache/thumbnails/*
+```
+2. Sometimes thumbnails does not generate because MIME type is not associated
+```bash
+xdg-mime default appimage-thumbnailer.desktop application/vnd.appimage
+```
+3. Run thumbnailer manually to test if icon is extracted
+```bash
+appimage-thumbnailer sample.AppImage icon.png 256
 ```
 
 ## License
