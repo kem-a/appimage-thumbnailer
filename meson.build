@@ -76,9 +76,25 @@ thumbnailer_file = configure_file(
 install_data(thumbnailer_file,
   install_dir: join_paths(get_option('datadir'), 'thumbnailers')
 )
+# Note: MIME type association is handled automatically via the .thumbnailer file's MimeType= entry.
+# Users may need to clear their thumbnail cache manually after installation:
+#   rm -rf ~/.cache/thumbnails/*
 
-# Add MIME type association during installation
-meson.add_install_script('xdg-mime', 'default', 'appimage-thumbnailer.desktop', 'application/vnd.appimage')
+# Install a post-install helper script. The script is safe to run as root
+# because it locates the intended non-root user (SUDO_USER/logname) and
+# runs user-scoped commands (thumbnail cache cleanup and xdg-mime) with
+# `su`/`runuser` so it does not operate on root's home by mistake.
+post_install_script = 'scripts/post-install.sh'
+install_data(post_install_script,
+  install_dir: join_paths(get_option('libdir'), 'appimage-thumbnailer'),
+  install_mode: '0755'
+)
 
-# Clear thumbnail cache so the updated handler gets picked up immediately
-meson.add_install_script('sh', '-c', 'rm -rf ~/.cache/thumbnails/*')
+# Invoke the installed post-install helper during `ninja install` so local
+# installs performed by users get the cache/MIME updates automatically.
+meson.add_install_script(join_paths(get_option('libdir'), 'appimage-thumbnailer', 'post-install.sh'))
+
+# Note for packagers: when creating .deb/.rpm packages you can call the
+# installed script from your package's postinst/%post script to reproduce
+# the same behavior in the package manager.
+
