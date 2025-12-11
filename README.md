@@ -51,10 +51,7 @@ sudo pacman -S meson ninja p7zip glib2 gdk-pixbuf2 librsvg cairo
 
 **DwarFS tools are bundled automatically** during the build process — static binaries (`dwarfsextract`, `dwarfsck`) are downloaded from the [official releases](https://github.com/mhx/dwarfs/releases) and installed alongside the thumbnailer. No additional installation is required.
 
-To disable bundling (e.g., for distro packaging where you want to use system-provided dwarfs):
-```bash
-meson setup build -Dbundle_dwarfs=false
-```
+To disable bundling (e.g., for distro packaging where you want to use system-provided dwarfs) use `meson setup build -Dbundle_dwarfs=false`
 
 ## Build & Install
 ```bash
@@ -66,15 +63,11 @@ sudo ninja -C build install
 ```
 Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.thumbnailer` descriptor under your Meson `prefix` (default `/usr/local`).
 
-Uninstall with `ninja -C build uninstall` (add `sudo` if you installed system-wide) using the same build directory.
+Uninstall with `sudo ninja -C build uninstall` using the same build directory.
 
-## Testing
-Run the helper manually to test before wiring into a desktop:
-```bash
-./build/appimage-thumbnailer Sample.AppImage /tmp/icon.png 256
-```
-- Argument order is `<AppImage> <output.png> [size]`.
-- The command exits `0` only after writing a valid PNG to `%o`; failures emit diagnostics on stderr so file managers can fall back to generic icons.
+## More help
+
+Type `appimage-thumbnailer --help` for more info
 
 ## Troubleshooting
 
