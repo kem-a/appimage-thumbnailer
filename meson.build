@@ -82,17 +82,17 @@ install_data(thumbnailer_file,
 
 # Install a post-install helper script. The script is safe to run as root
 # because it locates the intended non-root user (SUDO_USER/logname) and
-# runs user-scoped commands (thumbnail cache cleanup and xdg-mime) with
+# runs user-scoped commands (thumbnail cache cleanup) with
 # `su`/`runuser` so it does not operate on root's home by mistake.
 post_install_script = 'scripts/post-install.sh'
 install_data(post_install_script,
   install_dir: join_paths(get_option('libdir'), 'appimage-thumbnailer'),
-  install_mode: '0755'
+  install_mode: 'rwxr-xr-x'
 )
 
 # Invoke the installed post-install helper during `ninja install` so local
-# installs performed by users get the cache/MIME updates automatically.
-meson.add_install_script(join_paths(get_option('libdir'), 'appimage-thumbnailer', 'post-install.sh'))
+# installs performed by users get the cache updates automatically.
+meson.add_install_script(post_install_script)
 
 # Note for packagers: when creating .deb/.rpm packages you can call the
 # installed script from your package's postinst/%post script to reproduce
