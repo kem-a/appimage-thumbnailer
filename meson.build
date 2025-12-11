@@ -1,5 +1,6 @@
 project('appimage-thumbnailer', 'c',
-  version: 'v2.0.2',
+  version: 'v3.0.0',
+  meson_version: '>=1.1.0',
   default_options: ['warning_level=3', 'c_std=c11']
 )
 
@@ -20,7 +21,46 @@ if m_dep.found()
   declared_deps += m_dep
 endif
 
+# DwarFS tools configuration
+dwarfs_version = '0.14.1'
+dwarfs_tools_dir = get_option('prefix') / get_option('libdir') / 'appimage-thumbnailer'
+
+# Map host CPU to DwarFS release naming
+host_cpu = host_machine.cpu_family()
+dwarfs_arch_map = {
+  'x86_64': 'x86_64',
+  'aarch64': 'aarch64',
+  'arm': 'arm',
+  'x86': 'i386',
+  'ppc64': 'ppc64',
+  'ppc64le': 'ppc64le',
+  'riscv64': 'riscv64',
+  's390x': 's390x',
+}
+
+dwarfs_arch = dwarfs_arch_map.get(host_cpu, '')
+
+# Option to skip bundling dwarfs tools (for distro packaging)
+bundle_dwarfs = get_option('bundle_dwarfs')
+
 subdir('src')
+
+# Install bundled DwarFS tools if enabled and architecture is supported
+if bundle_dwarfs and dwarfs_arch != ''
+  fetch_script = files('dwarfs/fetch-dwarfs-tools.sh')
+  
+  # Custom target to download and extract dwarfs tools during build
+  dwarfs_tools = custom_target('dwarfs-tools',
+    output: ['dwarfsextract', 'dwarfsck'],
+    command: [
+      'sh', fetch_script, dwarfs_version, dwarfs_arch, meson.current_build_dir()
+    ],
+    install: true,
+    install_dir: dwarfs_tools_dir
+  )
+elif bundle_dwarfs and dwarfs_arch == ''
+  warning('DwarFS tools bundling requested but architecture "@0@" is not supported'.format(host_cpu))
+endif
 
 thumbnailer_conf = configuration_data()
 thumbnailer_binary = join_paths(get_option('prefix'), get_option('bindir'), 'appimage-thumbnailer')
@@ -36,3 +76,25 @@ thumbnailer_file = configure_file(
 install_data(thumbnailer_file,
   install_dir: join_paths(get_option('datadir'), 'thumbnailers')
 )
+# Note: MIME type association is handled automatically via the .thumbnailer file's MimeType= entry.
+# Users may need to clear their thumbnail cache manually after installation:
+#   rm -rf ~/.cache/thumbnails/*
+
+# Install a post-install helper script. The script is safe to run as root
+# because it locates the intended non-root user (SUDO_USER/logname) and
+# runs user-scoped commands (thumbnail cache cleanup) with
+# `su`/`runuser` so it does not operate on root's home by mistake.
+post_install_script = 'scripts/post-install.sh'
+install_data(post_install_script,
+  install_dir: join_paths(get_option('libdir'), 'appimage-thumbnailer'),
+  install_mode: 'rwxr-xr-x'
+)
+
+# Invoke the installed post-install helper during `ninja install` so local
+# installs performed by users get the cache updates automatically.
+meson.add_install_script(post_install_script)
+
+# Note for packagers: when creating .deb/.rpm packages you can call the
+# installed script from your package's postinst/%post script to reproduce
+# the same behavior in the package manager.
+

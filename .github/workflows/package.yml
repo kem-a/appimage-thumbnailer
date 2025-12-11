@@ -20,6 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            curl \
             meson \
             ninja-build \
             pkg-config \
@@ -38,7 +39,7 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: meson setup build --prefix=/usr
+        run: meson setup build --prefix=/usr -Dbundle_dwarfs=true
 
       - name: Build
         shell: bash

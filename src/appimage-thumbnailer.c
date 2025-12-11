@@ -15,7 +15,10 @@
 #include <gio/gio.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <librsvg/rsvg.h>
+
+#include "dwarfs-extract.h"
 
 #define DEFAULT_THUMBNAIL_SIZE 256
 #define MAX_SYMLINK_DEPTH 5
@@ -101,7 +104,7 @@ command_capture(const char *const argv[], GByteArray **output)
 }
 
 static gboolean
-extract_entry(const char *archive, const char *entry, GByteArray **output)
+extract_entry_7z(const char *archive, const char *entry, GByteArray **output)
 {
     if (!archive || !entry || *entry == '\0')
         return FALSE;
@@ -112,16 +115,50 @@ extract_entry(const char *archive, const char *entry, GByteArray **output)
     else
         clean_entry = g_strdup(entry);
 
-    const char *argv[] = {"7z", "e", "-so", archive, clean_entry, NULL};
+    /* Use -tSquashFS to force correct format detection for AppImages with multiple
+     * compression types (e.g., zstd-compressed ELF header + SquashFS payload) */
+    const char *argv[] = {"7z", "e", "-so", "-tSquashFS", archive, clean_entry, NULL};
     gboolean ok = command_capture(argv, output);
     g_free(clean_entry);
+
+    /* 7z may return success (exit 0) but produce no output for unsupported formats.
+     * Treat empty output as failure so we can fall back to other extractors. */
+    if (ok && (*output == NULL || (*output)->len == 0)) {
+        if (*output) {
+            g_byte_array_unref(*output);
+            *output = NULL;
+        }
+        return FALSE;
+    }
+
     return ok;
 }
 
 static gboolean
-list_archive_paths(const char *archive, GPtrArray **paths_out)
+extract_entry(const char *archive, const char *entry, GByteArray **output)
 {
-    const char *argv[] = {"7z", "l", "-slt", archive, NULL};
+    if (!archive || !entry || *entry == '\0')
+        return FALSE;
+
+    /* Try 7z first (works for SquashFS) */
+    if (extract_entry_7z(archive, entry, output))
+        return TRUE;
+
+    /* Fall back to dwarfsextract (for DwarFS images) */
+    if (dwarfs_tools_available()) {
+        if (dwarfs_extract_entry(archive, entry, output))
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
+list_archive_paths_7z(const char *archive, GPtrArray **paths_out)
+{
+    /* Use -tSquashFS to force correct format detection for AppImages with multiple
+     * compression types (e.g., zstd-compressed ELF header + SquashFS payload) */
+    const char *argv[] = {"7z", "l", "-slt", "-tSquashFS", archive, NULL};
     GByteArray *output = NULL;
     if (!command_capture(argv, &output))
         return FALSE;
@@ -148,6 +185,22 @@ list_archive_paths(const char *archive, GPtrArray **paths_out)
 
     *paths_out = paths;
     return TRUE;
+}
+
+static gboolean
+list_archive_paths(const char *archive, GPtrArray **paths_out)
+{
+    /* Try 7z first (works for SquashFS) */
+    if (list_archive_paths_7z(archive, paths_out))
+        return TRUE;
+
+    /* Fall back to dwarfsck (for DwarFS images) */
+    if (dwarfs_tools_available()) {
+        if (dwarfs_list_paths(archive, paths_out))
+            return TRUE;
+    }
+
+    return FALSE;
 }
 
 static gboolean
@@ -446,18 +499,42 @@ parse_size_argument(const char *arg)
 static void
 print_usage(const char *progname)
 {
-    g_print("Usage: %s <AppImage> <output.png> [size]\n", progname);
-    g_print("Extracts the AppImage icon into a PNG thumbnail (default size 256, range 1-4096).\n");
-    g_print("Follows the freedesktop.org thumbnail spec: https://specifications.freedesktop.org/thumbnail-spec/thumbnail-spec-latest.html\n");
+    g_print("Usage: %s [OPTIONS] <APPIMAGE> <OUTPUT> [SIZE]\n", progname);
+    g_print("\n");
+    g_print("Extract the embedded icon from an AppImage and write it as a PNG thumbnail. It uses 7z and bundled DwarFS binaries to achieve this.\n");
+    g_print("\n");
+    g_print("Arguments:\n");
+    g_print("  <APPIMAGE>        Path to the AppImage file\n");
+    g_print("  <OUTPUT>          Path to the output PNG thumbnail\n");
+    g_print("  [SIZE]            Thumbnail size in pixels (default: 256, range: 1-4096)\n");
+    g_print("\n");
     g_print("Options:\n");
-    g_print("  -h, --help        Show this help message and exit\n");
-    g_print("  -V, --version     Show version information and exit\n");
+    g_print("  -h, --help        Print this help message and exit\n");
+    g_print("  -V, --version     Print version information and exit\n");
+    g_print("\n");
+    g_print("Examples:\n");
+    g_print("  %s app.AppImage thumbnail.png\n", progname);
+    g_print("  %s app.AppImage thumbnail.png 128\n", progname);
+    g_print("\n");
+    g_print("Conforms to the freedesktop.org thumbnail specification:\n");
+    g_print("  <https://specifications.freedesktop.org/thumbnail-spec/latest>\n");
+    g_print("\n");
+    g_print("License:\n");
+    g_print("  MIT License\n");
+    g_print("  Copyright (c) Arnis Kemlers\n");
+    g_print("  <https://github.com/kem-a/appimage-thumbnailer>\n");
+    g_print("\n");
+    g_print("Third-party components:\n");
+    g_print("  Includes prebuilt DwarFS binaries from <https://github.com/mhx/dwarfs>\n");
+    g_print("  DwarFS is distributed under the MIT and GPL-3.0 licenses.\n");
 }
 
 static void
 print_version(void)
 {
     g_print("appimage-thumbnailer %s\n", APPIMAGE_THUMBNAILER_VERSION);
+    g_print("Copyright (c) Arnis Kemlers\n");
+    g_print("License: MIT\n");
 }
 
 int
@@ -480,8 +557,12 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    if (!g_find_program_in_path("7z")) {
-        g_printerr("7z is required but not found in PATH\n");
+    gboolean have_7z = g_find_program_in_path("7z") != NULL;
+    gboolean have_dwarfs = dwarfs_tools_available();
+
+    if (!have_7z && !have_dwarfs) {
+        g_printerr("Neither 7z nor dwarfs tools (dwarfsextract, dwarfsck) found.\n");
+        g_printerr("Install p7zip for SquashFS AppImages or dwarfs for DwarFS AppImages.\n");
         return EXIT_FAILURE;
     }
 
