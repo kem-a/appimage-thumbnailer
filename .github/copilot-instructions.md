@@ -3,7 +3,7 @@
 ## Architecture Snapshot
 - Only one entrypoint ships: the Meson-built C binary `src/appimage-thumbnailer.c`, invoked as `appimage-thumbnailer <AppImage> <output.png> [size]` and expected to exit `0` only after writing `%o`.
 - `appimage-thumbnailer.thumbnailer` is the sole integration point; keep its MIME list in sync with any runtime changes because desktop shells rely on it to dispatch the helper.
-- The code wraps `7z` via `command_capture`/`extract_entry`, keeps everything in-memory, and never writes temp files—maintain that streaming contract when adding formats or tooling.
+- The code wraps `7z` for SquashFS and `dwarfsextract` for DwarFS via `command_capture`/`extract_entry`, keeps everything in-memory, and never writes temp files—maintain that streaming contract when adding formats or tooling.
 
 ## Icon Extraction Flow
 - Every path is canonicalized (`realpath` + `g_canonicalize_filename`) before use; mirror that when accepting new inputs.
@@ -13,12 +13,14 @@
 
 ## Build & Manual Test Workflow
 - Configure and build with Meson/Ninja: `meson setup build` (once) then `ninja -C build`. Install to your prefix with `sudo ninja -C build install` to drop the binary plus `.thumbnailer` under `$datadir/thumbnailers`.
+- DwarFS tools (`dwarfsextract`, `dwarfsck`) are bundled automatically from official releases during build unless disabled with `-Dbundle_dwarfs=false`.
 - Quick verification: `./build/appimage-thumbnailer sample.AppImage /tmp/icon.png 256` and ensure the command exits `0` only when `/tmp/icon.png` exists and is a valid PNG.
 - Desktop caches rarely refresh instantly; when validating integration, clear GNOME caches with `rm -rf ~/.cache/thumbnails/*` before reopening Nautilus.
 
 ## Dependencies & External Tools
-- Runtime requires `7z` plus the libraries declared in `meson.build`: GLib/GIO (2.56+), GdkPixbuf (2.42+), librsvg (2.54+), Cairo, and libm (optional). If you add more, update both the top-level `meson.build` and `README.md`.
-- The helper does not ship installer scripts in this branch; assume Meson-based deployment when documenting or automating setup steps.
+- Runtime requires `7z` for SquashFS or `dwarfsextract`/`dwarfsck` for DwarFS (bundled by default).
+- Linked system libraries: GLib/GIO (2.56+), GdkPixbuf (2.42+), librsvg (2.54+), Cairo, and libm (optional). If you add more, update both the top-level `meson.build` and `README.md`.
+- The helper does not ship installer scripts; assume Meson-based deployment.
 
 ## Implementation Conventions
 - Error handling is user-facing: log actionable messages with `g_printerr` and propagate failures all the way to `main` so desktop environments can fall back cleanly.
