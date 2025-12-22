@@ -1,5 +1,5 @@
 project('appimage-thumbnailer', 'c',
-  version: 'v3.0.0',
+  version: 'v3.0.1',
   meson_version: '>=1.1.0',
   default_options: ['warning_level=3', 'c_std=c11']
 )
@@ -30,6 +30,7 @@ host_cpu = host_machine.cpu_family()
 dwarfs_arch_map = {
   'x86_64': 'x86_64',
   'aarch64': 'aarch64',
+  'arm64': 'aarch64',
   'arm': 'arm',
   'x86': 'i386',
   'ppc64': 'ppc64',
