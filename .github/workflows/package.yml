@@ -15,10 +15,13 @@ jobs:
             runs_on: ubuntu-latest
             fpm_arch_deb: amd64
             fpm_arch_rpm: x86_64
+            is_cross: false
           - arch: aarch64
-            runs_on: ubuntu-22.04-arm64
+            runs_on: ubuntu-latest
             fpm_arch_deb: arm64
             fpm_arch_rpm: aarch64
+            is_cross: true
+            cross_file: .github/cross/aarch64.txt
     runs-on: ${{ matrix.runs_on }}
     permissions:
       contents: write
@@ -30,6 +33,17 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
+          if [ "${{ matrix.is_cross }}" = "true" ]; then
+            sudo dpkg --add-architecture arm64
+            sudo apt-get update
+            sudo apt-get install -y \
+              gcc-aarch64-linux-gnu \
+              pkg-config-aarch64-linux-gnu \
+              libglib2.0-dev:arm64 \
+              libgdk-pixbuf-2.0-dev:arm64 \
+              librsvg2-dev:arm64 \
+              libcairo2-dev:arm64
+          fi
           sudo apt-get install -y \
             curl \
             meson \
@@ -50,13 +64,19 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: meson setup build --prefix=/usr -Dbundle_dwarfs=true
+        run: |
+          EXTRA_OPTS=""
+          if [ "${{ matrix.is_cross }}" = "true" ]; then
+            EXTRA_OPTS="--cross-file ${{ matrix.cross_file }}"
+          fi
+          meson setup build --prefix=/usr -Dbundle_dwarfs=true $EXTRA_OPTS
 
       - name: Build
         shell: bash
         run: ninja -C build
 
       - name: Run tests
+        if: matrix.is_cross == false
         shell: bash
         run: meson test -C build
 
