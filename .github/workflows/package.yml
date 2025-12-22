@@ -16,7 +16,7 @@ jobs:
             fpm_arch_deb: amd64
             fpm_arch_rpm: x86_64
           - arch: aarch64
-            runs_on: ubuntu-24.04-arm64
+            runs_on: ubuntu-22.04-arm64
             fpm_arch_deb: arm64
             fpm_arch_rpm: aarch64
     runs-on: ${{ matrix.runs_on }}
