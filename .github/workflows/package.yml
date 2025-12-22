@@ -34,19 +34,21 @@ jobs:
         run: |
           if [ "${{ matrix.is_cross }}" = "true" ]; then
             sudo dpkg --add-architecture arm64
-            # Update existing sources to be amd64 only to avoid 404s on arm64
-            sudo sed -i 's/deb http/deb [arch=amd64] http/g' /etc/apt/sources.list || true
-            sudo sed -i 's/deb https/deb [arch=amd64] https/g' /etc/apt/sources.list || true
+            # Handle DEB822 format (Ubuntu 24.04+) - add architecture restriction
             if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-              sudo sed -i 's/Architectures: /Architectures: amd64 /' /etc/apt/sources.list.d/ubuntu.sources
+              sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
             fi
-            # Add arm64 sources
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+            # Handle traditional format
+            if [ -f /etc/apt/sources.list ]; then
+              sudo sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
+              sudo sed -i 's/^deb https/deb [arch=amd64] https/g' /etc/apt/sources.list
+            fi
+            # Add arm64 sources from ports.ubuntu.com
+            CODENAME=$(lsb_release -cs)
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
           fi
-          sudo sed -i '/security.ubuntu.com.*arm64/d' /etc/apt/sources.list.d/arm64.list || true
-          sudo sed -i '/security.ubuntu.com.*arm64/d' /etc/apt/sources.list || true
           sudo apt-get update
           if [ "${{ matrix.is_cross }}" = "true" ]; then
             sudo apt-get install -y \
