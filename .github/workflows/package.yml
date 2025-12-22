@@ -54,11 +54,14 @@ jobs:
             sudo apt-get install -y \
               gcc-aarch64-linux-gnu \
               g++-aarch64-linux-gnu \
-              pkg-config-aarch64-linux-gnu \
               libglib2.0-dev:arm64 \
               libgdk-pixbuf-2.0-dev:arm64 \
               librsvg2-dev:arm64 \
               libcairo2-dev:arm64
+            # Create pkg-config wrapper for cross-compilation
+            echo '#!/bin/sh' | sudo tee /usr/local/bin/aarch64-linux-gnu-pkg-config
+            echo 'PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig pkg-config "$@"' | sudo tee -a /usr/local/bin/aarch64-linux-gnu-pkg-config
+            sudo chmod +x /usr/local/bin/aarch64-linux-gnu-pkg-config
           fi
           sudo apt-get install -y \
             curl \

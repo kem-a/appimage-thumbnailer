@@ -5,6 +5,9 @@ ar = 'aarch64-linux-gnu-ar'
 strip = 'aarch64-linux-gnu-strip'
 pkgconfig = 'aarch64-linux-gnu-pkg-config'
 
+[built-in options]
+pkg_config_path = '/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig'
+
 [host_machine]
 system = 'linux'
 cpu_family = 'aarch64'
