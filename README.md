@@ -62,6 +62,22 @@ Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.t
 
 Uninstall with `sudo ninja -C build uninstall` using the same build directory.
 
+## Remove thumbnail background
+
+Remove checkered alpha channel drawing around thumbnails and icons in Nautilus. Creates more cleaner look. 
+
+Edit file and add this code snippet to `~/.config/gtk-4.0/gtk.css`
+
+```css
+/*Clear Nautilus thumbnail background*/
+.thumbnail,
+.icon .thumbnail,
+.grid-view .thumbnail {
+  background: none;
+  box-shadow: none;
+}
+```
+
 ## More help
 
 Type `appimage-thumbnailer --help` for more info
