@@ -45,6 +45,8 @@ jobs:
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
             echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
           fi
+          sudo sed -i '/security.ubuntu.com.*arm64/d' /etc/apt/sources.list.d/arm64.list || true
+          sudo sed -i '/security.ubuntu.com.*arm64/d' /etc/apt/sources.list || true
           sudo apt-get update
           if [ "${{ matrix.is_cross }}" = "true" ]; then
             sudo apt-get install -y \
