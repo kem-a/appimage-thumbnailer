@@ -67,7 +67,7 @@ Uninstall with `sudo ninja -C build uninstall` using the same build directory.
 
 Remove checkered alpha channel drawing around thumbnails and icons in Nautilus. Creates more cleaner look. 
 
-Edit file and add this code snippet to `~/.config/gtk-4.0/gtk.css`
+Edit `~/.config/gtk-4.0/gtk.css` file and add CSS code snippet to it:
 
 ```css
 /*Clear Nautilus thumbnail background*/
