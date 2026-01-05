@@ -177,7 +177,22 @@ dwarfs_extract_entry(const char *archive, const char *entry, GByteArray **output
         gsize length = 0;
         GError *error = NULL;
 
-        if (g_file_get_contents(extracted_path, &contents, &length, &error)) {
+        /* Check if the extracted file is a symlink.
+         * For symlinks, return the link target as the content (this is the "pointer"
+         * that process_entry_following_symlinks will follow) */
+        if (g_file_test(extracted_path, G_FILE_TEST_IS_SYMLINK)) {
+            contents = g_file_read_link(extracted_path, &error);
+            if (contents) {
+                length = strlen(contents);
+                *output = g_byte_array_new();
+                g_byte_array_append(*output, (const guchar *) contents, (guint) length);
+                g_free(contents);
+                result = TRUE;
+            } else {
+                if (error)
+                    g_error_free(error);
+            }
+        } else if (g_file_get_contents(extracted_path, &contents, &length, &error)) {
             *output = g_byte_array_new();
             g_byte_array_append(*output, (const guchar *) contents, (guint) length);
             g_free(contents);
@@ -222,7 +237,8 @@ dwarfs_list_paths(const char *archive, GPtrArray **paths_out)
     if (!dwarfsck_path)
         return FALSE;
 
-    const char *argv[] = {dwarfsck_path, "-l", "--no-check", "-O", "auto", archive, NULL};
+    /* Use -v (verbose) to get tar-style output with permissions, user/group, size, date, time, path */
+    const char *argv[] = {dwarfsck_path, "-l", "-v", "--no-check", "-O", "auto", archive, NULL};
     GByteArray *output = NULL;
     if (!command_capture_dwarfs(argv, &output))
         return FALSE;
@@ -263,6 +279,12 @@ dwarfs_list_paths(const char *archive, GPtrArray **paths_out)
         g_strfreev(parts);
 
         if (path && *path != '\0') {
+            /* Handle symlinks: strip " -> target" suffix from path
+             * e.g., ".DirIcon -> icon.svg" becomes ".DirIcon" */
+            gchar *arrow = g_strstr_len(path, -1, " -> ");
+            if (arrow)
+                *arrow = '\0';
+
             /* Normalize path - remove leading slash if present */
             gchar *normalized = g_strdup(path[0] == '/' ? path + 1 : path);
             /* Remove trailing newline/whitespace */

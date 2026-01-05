@@ -5,3 +5,4 @@ build/
 dist/
 *.log
 *.tmp
+*.AppImage
