@@ -95,14 +95,42 @@ command_capture_dwarfs(const char *const argv[], GByteArray **output)
 }
 
 static gchar *
+get_self_dir(void)
+{
+    gchar *exe = g_file_read_link("/proc/self/exe", NULL);
+    if (!exe)
+        return NULL;
+    gchar *dir = g_path_get_dirname(exe);
+    g_free(exe);
+    return dir;
+}
+
+static gchar *
 find_tool(const char *name)
 {
-    /* First check bundled location */
+    /* First check bundled location (install prefix) */
     gchar *bundled = g_build_filename(DWARFS_TOOLS_DIR, name, NULL);
     if (g_file_test(bundled, G_FILE_TEST_IS_EXECUTABLE)) {
         return bundled;
     }
     g_free(bundled);
+
+    /* Check next to the executable (works from build dir) */
+    gchar *self_dir = get_self_dir();
+    if (self_dir) {
+        /* Tools may sit alongside the binary (build/dwarfsextract)
+         * or one level up (build/src/../dwarfsextract) */
+        const gchar *relative_dirs[] = {".", "..", NULL};
+        for (int i = 0; relative_dirs[i] != NULL; ++i) {
+            gchar *candidate = g_build_filename(self_dir, relative_dirs[i], name, NULL);
+            if (g_file_test(candidate, G_FILE_TEST_IS_EXECUTABLE)) {
+                g_free(self_dir);
+                return candidate;
+            }
+            g_free(candidate);
+        }
+        g_free(self_dir);
+    }
 
     /* Fall back to system PATH */
     gchar *system_path = g_find_program_in_path(name);
