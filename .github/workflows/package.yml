@@ -144,10 +144,19 @@ jobs:
             --depends squashfs-tools \
             -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.${{ matrix.fpm_arch_rpm }}.rpm" \
             -C "$DESTDIR" usr
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: |
+            packages/appimage-thumbnailer_${{ steps.meta.outputs.version }}_${{ matrix.fpm_arch_deb }}.deb
+            packages/appimage-thumbnailer-${{ steps.meta.outputs.version }}-1.${{ matrix.fpm_arch_rpm }}.rpm
+
       - name: Upload release packages
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          fail_on_unmatched_files: true
           files: |
             packages/appimage-thumbnailer_${{ steps.meta.outputs.version }}_${{ matrix.fpm_arch_deb }}.deb
             packages/appimage-thumbnailer-${{ steps.meta.outputs.version }}-1.${{ matrix.fpm_arch_rpm }}.rpm
