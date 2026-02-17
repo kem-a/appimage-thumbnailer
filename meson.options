@@ -1,5 +1,11 @@
 option('bundle_dwarfs',
   type: 'boolean',
   value: true,
-  description: 'Bundle DwarFS tools (dwarfsextract, dwarfsck) for DwarFS AppImage support'
+  description: 'Bundle dwarfsextract for DwarFS AppImage support'
+)
+
+option('bundle_squashfs',
+  type: 'boolean',
+  value: true,
+  description: 'Bundle unsquashfs from squashfs-tools (built from source at build time). If disabled, system unsquashfs is used.'
 )

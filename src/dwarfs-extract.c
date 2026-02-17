@@ -25,7 +25,6 @@
 #endif
 
 static gchar *dwarfsextract_path = NULL;
-static gchar *dwarfsck_path = NULL;
 static gboolean tools_checked = FALSE;
 static gboolean tools_available_cached = FALSE;
 
@@ -166,11 +165,9 @@ init_tool_paths(void)
 
     tools_checked = TRUE;
     dwarfsextract_path = find_tool("dwarfsextract");
-    dwarfsck_path = find_tool("dwarfsck");
-    tools_available_cached = (dwarfsextract_path != NULL && dwarfsck_path != NULL);
+    tools_available_cached = (dwarfsextract_path != NULL);
 
     g_debug("init_tool_paths: dwarfsextract='%s'", dwarfsextract_path ? dwarfsextract_path : "(not found)");
-    g_debug("init_tool_paths: dwarfsck='%s'", dwarfsck_path ? dwarfsck_path : "(not found)");
     g_debug("init_tool_paths: dwarfs tools available: %s", tools_available_cached ? "yes" : "no");
 }
 
@@ -299,90 +296,4 @@ dwarfs_extract_entry(const char *archive, const char *entry, GByteArray **output
     return result;
 }
 
-gboolean
-dwarfs_list_paths(const char *archive, GPtrArray **paths_out)
-{
-    g_debug("dwarfs_list_paths: listing entries in '%s'", archive);
 
-    init_tool_paths();
-    if (!dwarfsck_path) {
-        g_debug("dwarfs_list_paths: dwarfsck not available");
-        return FALSE;
-    }
-
-    /* Use -v (verbose) to get tar-style output with permissions, user/group, size, date, time, path */
-    const char *argv[] = {dwarfsck_path, "-l", "-v", "--no-check", "-O", "auto", archive, NULL};
-    GByteArray *output = NULL;
-    if (!command_capture_dwarfs(argv, &output)) {
-        g_debug("dwarfs_list_paths: dwarfsck command failed for '%s'", archive);
-        return FALSE;
-    }
-
-    GPtrArray *paths = g_ptr_array_new_with_free_func(g_free);
-    gchar **lines = g_strsplit((const gchar *) output->data, "\n", -1);
-
-    /* dwarfsck -l output is like tar -tv format:
-     * -rw-r--r--   1000/1000       1234 2024-01-01 00:00 path/to/file
-     * We need to extract the path from each line */
-    for (gint i = 0; lines[i] != NULL; ++i) {
-        gchar *line = lines[i];
-        if (*line == '\0')
-            continue;
-
-        /* Skip permission, user/group, size, date, time and get to the path
-         * Format: perms user/group size date time path */
-        gchar **parts = g_strsplit(line, " ", -1);
-        guint non_empty = 0;
-        gchar *path = NULL;
-
-        /* Count non-empty parts to find the path (6th non-empty field) */
-        for (guint j = 0; parts[j] != NULL; ++j) {
-            if (*parts[j] != '\0') {
-                non_empty++;
-                if (non_empty >= 6) {
-                    /* Everything from here is the path (may contain spaces) */
-                    GString *path_str = g_string_new(parts[j]);
-                    for (guint k = j + 1; parts[k] != NULL; ++k) {
-                        g_string_append_c(path_str, ' ');
-                        g_string_append(path_str, parts[k]);
-                    }
-                    path = g_string_free(path_str, FALSE);
-                    break;
-                }
-            }
-        }
-        g_strfreev(parts);
-
-        if (path && *path != '\0') {
-            /* Handle symlinks: strip " -> target" suffix from path
-             * e.g., ".DirIcon -> icon.svg" becomes ".DirIcon" */
-            gchar *arrow = g_strstr_len(path, -1, " -> ");
-            if (arrow)
-                *arrow = '\0';
-
-            /* Normalize path - remove leading slash if present */
-            gchar *normalized = g_strdup(path[0] == '/' ? path + 1 : path);
-            /* Remove trailing newline/whitespace */
-            g_strchomp(normalized);
-            if (*normalized != '\0')
-                g_ptr_array_add(paths, normalized);
-            else
-                g_free(normalized);
-            g_free(path);
-        } else {
-            g_free(path);
-        }
-    }
-    g_strfreev(lines);
-    g_byte_array_unref(output);
-
-    if (paths->len == 0) {
-        g_debug("dwarfs_list_paths: no paths found in archive '%s'", archive);
-        g_ptr_array_unref(paths);
-        return FALSE;
-    }
-
-    g_debug("dwarfs_list_paths: found %u entries in archive '%s'", paths->len, archive);
-    *paths_out = paths;
-    return TRUE;
-}

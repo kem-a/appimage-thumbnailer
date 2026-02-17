@@ -21,12 +21,11 @@ if [ ! -f "$TARBALL" ]; then
     curl -L -o "$TARBALL" "$URL"
 fi
 
-# Extract the specific binaries we need
-echo "Extracting dwarfsextract and dwarfsck..."
-tar -xf "$TARBALL" "${EXTRACT_DIR}/bin/dwarfsextract" "${EXTRACT_DIR}/bin/dwarfsck"
+# Extract the specific binary we need
+echo "Extracting dwarfsextract..."
+tar -xf "$TARBALL" "${EXTRACT_DIR}/bin/dwarfsextract"
 mv "${EXTRACT_DIR}/bin/dwarfsextract" .
-mv "${EXTRACT_DIR}/bin/dwarfsck" .
 rm -rf "$EXTRACT_DIR"
 
 echo "DwarFS tools extracted to $OUTPUT_DIR"
-ls -la dwarfsextract dwarfsck
+ls -la dwarfsextract

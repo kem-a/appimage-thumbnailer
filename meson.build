@@ -1,5 +1,5 @@
 project('appimage-thumbnailer', 'c',
-  version: 'v3.0.3',
+  version: 'v4.0.0',
   meson_version: '>=1.1.0',
   default_options: ['warning_level=3', 'c_std=c11']
 )
@@ -44,6 +44,11 @@ dwarfs_arch = dwarfs_arch_map.get(host_cpu, '')
 # Option to skip bundling dwarfs tools (for distro packaging)
 bundle_dwarfs = get_option('bundle_dwarfs')
 
+# SquashFS tools (unsquashfs) configuration
+squashfs_tools_version = '4.6.1'
+squashfs_tools_dir = dwarfs_tools_dir  # share the same tools directory
+bundle_squashfs = get_option('bundle_squashfs')
+
 subdir('src')
 
 # Install bundled DwarFS tools if enabled and architecture is supported
@@ -52,7 +57,7 @@ if bundle_dwarfs and dwarfs_arch != ''
   
   # Custom target to download and extract dwarfs tools during build
   dwarfs_tools = custom_target('dwarfs-tools',
-    output: ['dwarfsextract', 'dwarfsck'],
+    output: ['dwarfsextract'],
     command: [
       'sh', fetch_script, dwarfs_version, dwarfs_arch, meson.current_build_dir()
     ],
@@ -61,6 +66,21 @@ if bundle_dwarfs and dwarfs_arch != ''
   )
 elif bundle_dwarfs and dwarfs_arch == ''
   warning('DwarFS tools bundling requested but architecture "@0@" is not supported'.format(host_cpu))
+endif
+
+# Install bundled unsquashfs if enabled
+if bundle_squashfs
+  build_squashfs_script = files('squashfs-tools/build-unsquashfs.sh')
+
+  squashfs_tools = custom_target('squashfs-tools',
+    output: ['unsquashfs'],
+    command: [
+      'sh', build_squashfs_script, squashfs_tools_version,
+      meson.current_build_dir(), cc.cmd_array()[0]
+    ],
+    install: true,
+    install_dir: squashfs_tools_dir
+  )
 endif
 
 thumbnailer_conf = configuration_data()
