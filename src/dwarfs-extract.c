@@ -32,8 +32,12 @@ static gboolean tools_available_cached = FALSE;
 static gboolean
 command_capture_dwarfs(const char *const argv[], GByteArray **output)
 {
+    if (argv && argv[0])
+        g_debug("command_capture_dwarfs: running '%s'", argv[0]);
+
     int pipe_fd[2];
     if (pipe(pipe_fd) != 0) {
+        g_debug("command_capture_dwarfs: pipe() failed: %s", g_strerror(errno));
         return FALSE;
     }
 
@@ -59,6 +63,8 @@ command_capture_dwarfs(const char *const argv[], GByteArray **output)
         execvp(argv[0], (char *const *) argv);
         _exit(127);
     }
+
+    g_debug("command_capture_dwarfs: forked child pid %d for '%s'", (int) pid, argv[0]);
 
     close(pipe_fd[1]);
     GByteArray *arr = g_byte_array_new();
@@ -86,10 +92,14 @@ command_capture_dwarfs(const char *const argv[], GByteArray **output)
     }
 
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        g_debug("command_capture_dwarfs: '%s' exited with status %d (normal=%d)",
+                argv[0], WIFEXITED(status) ? WEXITSTATUS(status) : -1,
+                WIFEXITED(status));
         g_byte_array_unref(arr);
         return FALSE;
     }
 
+    g_debug("command_capture_dwarfs: '%s' succeeded, captured %u bytes", argv[0], arr->len);
     *output = arr;
     return TRUE;
 }
@@ -108,11 +118,15 @@ get_self_dir(void)
 static gchar *
 find_tool(const char *name)
 {
+    g_debug("find_tool: searching for '%s'", name);
+
     /* First check bundled location (install prefix) */
     gchar *bundled = g_build_filename(DWARFS_TOOLS_DIR, name, NULL);
     if (g_file_test(bundled, G_FILE_TEST_IS_EXECUTABLE)) {
+        g_debug("find_tool: found bundled '%s' at '%s'", name, bundled);
         return bundled;
     }
+    g_debug("find_tool: bundled path '%s' not found or not executable", bundled);
     g_free(bundled);
 
     /* Check next to the executable (works from build dir) */
@@ -124,16 +138,23 @@ find_tool(const char *name)
         for (int i = 0; relative_dirs[i] != NULL; ++i) {
             gchar *candidate = g_build_filename(self_dir, relative_dirs[i], name, NULL);
             if (g_file_test(candidate, G_FILE_TEST_IS_EXECUTABLE)) {
+                g_debug("find_tool: found '%s' adjacent to executable at '%s'", name, candidate);
                 g_free(self_dir);
                 return candidate;
             }
             g_free(candidate);
         }
         g_free(self_dir);
+    } else {
+        g_debug("find_tool: could not determine self directory for '%s'", name);
     }
 
     /* Fall back to system PATH */
     gchar *system_path = g_find_program_in_path(name);
+    if (system_path)
+        g_debug("find_tool: found '%s' in system PATH at '%s'", name, system_path);
+    else
+        g_debug("find_tool: '%s' not found anywhere", name);
     return system_path;
 }
 
@@ -147,6 +168,10 @@ init_tool_paths(void)
     dwarfsextract_path = find_tool("dwarfsextract");
     dwarfsck_path = find_tool("dwarfsck");
     tools_available_cached = (dwarfsextract_path != NULL && dwarfsck_path != NULL);
+
+    g_debug("init_tool_paths: dwarfsextract='%s'", dwarfsextract_path ? dwarfsextract_path : "(not found)");
+    g_debug("init_tool_paths: dwarfsck='%s'", dwarfsck_path ? dwarfsck_path : "(not found)");
+    g_debug("init_tool_paths: dwarfs tools available: %s", tools_available_cached ? "yes" : "no");
 }
 
 gboolean
@@ -159,12 +184,17 @@ dwarfs_tools_available(void)
 gboolean
 dwarfs_extract_entry(const char *archive, const char *entry, GByteArray **output)
 {
+    g_debug("dwarfs_extract_entry: attempting to extract '%s' from '%s'",
+            entry ? entry : "(null)", archive ? archive : "(null)");
+
     if (!archive || !entry || *entry == '\0')
         return FALSE;
 
     init_tool_paths();
-    if (!dwarfsextract_path)
+    if (!dwarfsextract_path) {
+        g_debug("dwarfs_extract_entry: dwarfsextract not available");
         return FALSE;
+    }
 
     gchar *clean_entry = NULL;
     if (entry[0] == '/')
@@ -178,10 +208,13 @@ dwarfs_extract_entry(const char *archive, const char *entry, GByteArray **output
     /* Extract to a temp directory and read from there */
     gchar *tmpdir = g_dir_make_tmp("appimage-thumb-XXXXXX", NULL);
     if (!tmpdir) {
+        g_debug("dwarfs_extract_entry: failed to create temp directory");
         g_free(clean_entry);
         g_free(pattern);
         return FALSE;
     }
+
+    g_debug("dwarfs_extract_entry: extracting '%s' to tmpdir '%s'", clean_entry, tmpdir);
 
     const char *argv[] = {
         dwarfsextract_path,
@@ -205,27 +238,35 @@ dwarfs_extract_entry(const char *archive, const char *entry, GByteArray **output
         gsize length = 0;
         GError *error = NULL;
 
+        g_debug("dwarfs_extract_entry: checking extracted file at '%s'", extracted_path);
+
         /* Check if the extracted file is a symlink.
          * For symlinks, return the link target as the content (this is the "pointer"
          * that process_entry_following_symlinks will follow) */
         if (g_file_test(extracted_path, G_FILE_TEST_IS_SYMLINK)) {
             contents = g_file_read_link(extracted_path, &error);
             if (contents) {
+                g_debug("dwarfs_extract_entry: '%s' is a symlink pointing to '%s'", clean_entry, contents);
                 length = strlen(contents);
                 *output = g_byte_array_new();
                 g_byte_array_append(*output, (const guchar *) contents, (guint) length);
                 g_free(contents);
                 result = TRUE;
             } else {
+                g_debug("dwarfs_extract_entry: failed to read symlink '%s': %s",
+                        extracted_path, error ? error->message : "unknown");
                 if (error)
                     g_error_free(error);
             }
         } else if (g_file_get_contents(extracted_path, &contents, &length, &error)) {
+            g_debug("dwarfs_extract_entry: read %" G_GSIZE_FORMAT " bytes from '%s'", length, clean_entry);
             *output = g_byte_array_new();
             g_byte_array_append(*output, (const guchar *) contents, (guint) length);
             g_free(contents);
             result = TRUE;
         } else {
+            g_debug("dwarfs_extract_entry: failed to read extracted file '%s': %s",
+                    extracted_path, error ? error->message : "unknown");
             if (error)
                 g_error_free(error);
         }
@@ -261,15 +302,21 @@ dwarfs_extract_entry(const char *archive, const char *entry, GByteArray **output
 gboolean
 dwarfs_list_paths(const char *archive, GPtrArray **paths_out)
 {
+    g_debug("dwarfs_list_paths: listing entries in '%s'", archive);
+
     init_tool_paths();
-    if (!dwarfsck_path)
+    if (!dwarfsck_path) {
+        g_debug("dwarfs_list_paths: dwarfsck not available");
         return FALSE;
+    }
 
     /* Use -v (verbose) to get tar-style output with permissions, user/group, size, date, time, path */
     const char *argv[] = {dwarfsck_path, "-l", "-v", "--no-check", "-O", "auto", archive, NULL};
     GByteArray *output = NULL;
-    if (!command_capture_dwarfs(argv, &output))
+    if (!command_capture_dwarfs(argv, &output)) {
+        g_debug("dwarfs_list_paths: dwarfsck command failed for '%s'", archive);
         return FALSE;
+    }
 
     GPtrArray *paths = g_ptr_array_new_with_free_func(g_free);
     gchar **lines = g_strsplit((const gchar *) output->data, "\n", -1);
@@ -330,10 +377,12 @@ dwarfs_list_paths(const char *archive, GPtrArray **paths_out)
     g_byte_array_unref(output);
 
     if (paths->len == 0) {
+        g_debug("dwarfs_list_paths: no paths found in archive '%s'", archive);
         g_ptr_array_unref(paths);
         return FALSE;
     }
 
+    g_debug("dwarfs_list_paths: found %u entries in archive '%s'", paths->len, archive);
     *paths_out = paths;
     return TRUE;
 }
