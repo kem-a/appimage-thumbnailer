@@ -43,16 +43,34 @@ To disable bundling (e.g., for distro packaging where you want to use system-pro
 sudo dnf install meson ninja-build squashfs-tools glib2-devel gdk-pixbuf2-devel librsvg2-devel cairo-devel
 ```
 
+Additional packages required when bundling unsquashfs (`-Dbundle_squashfs=true`) or dwarfsextract (`-Dbundle_dwarfs=true`, enabled by default):
+
+```bash
+sudo dnf install curl zlib-devel libzstd-devel xz-devel
+```
+
 **Ubuntu / Debian:**
 
 ```bash
 sudo apt install meson ninja-build squashfs-tools libglib2.0-dev libgdk-pixbuf-2.0-dev librsvg2-dev libcairo2-dev
 ```
 
+Additional packages required when bundling unsquashfs or dwarfsextract:
+
+```bash
+sudo apt install curl zlib1g-dev libzstd-dev liblzma-dev
+```
+
 **Arch Linux:**
 
 ```bash
 sudo pacman -S meson ninja squashfs-tools glib2 gdk-pixbuf2 librsvg cairo
+```
+
+Additional packages required when bundling unsquashfs or dwarfsextract:
+
+```bash
+sudo pacman -S curl zlib zstd xz
 ```
 
 </details>
