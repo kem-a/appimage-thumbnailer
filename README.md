@@ -25,14 +25,6 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 - Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
 
-### DwarFS Support
-
-[DwarFS](https://github.com/mhx/dwarfs) is a high-compression read-only filesystem that offers significantly better compression ratios than SquashFS. Some modern AppImages (e.g., those created with [uruntime](https://github.com/VHSgunzo/uruntime) or [PELF](https://github.com/xplshn/pelf)) use DwarFS instead of SquashFS.
-
-**DwarFS tools are bundled automatically** during the build process — the static `dwarfsextract` binary is downloaded from the [official releases](https://github.com/mhx/dwarfs/releases) and installed alongside the thumbnailer. No additional installation is required.
-
-To disable bundling (e.g., for distro packaging where you want to use system-provided dwarfs) use `meson setup build -Dbundle_dwarfs=false`
-
 ## Build & Install
 
 <details> <summary> Installing Dependencies <b>(click to open)</b> </summary>
@@ -87,7 +79,7 @@ Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.t
 
 Uninstall with `sudo ninja -C build uninstall` using the same build directory.
 
-## Remove thumbnail background
+## (Optional) Remove thumbnail background
 
 Remove checkered alpha channel drawing around thumbnails and icons in Nautilus. Creates more cleaner look.
 
