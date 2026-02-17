@@ -129,6 +129,7 @@ jobs:
             --description "In-process AppImage thumbnailer" \
             --license MIT \
             --url "https://github.com/kem-a/appimage-thumbnailer" \
+            --depends "p7zip-full | 7zip" \
             -p "$PACKAGE_DIR/appimage-thumbnailer_${VERSION}_${{ matrix.fpm_arch_deb }}.deb" \
             -C "$DESTDIR" usr
           fpm -s dir -t rpm -n appimage-thumbnailer \
@@ -137,6 +138,7 @@ jobs:
             --description "In-process AppImage thumbnailer" \
             --license MIT \
             --url "https://github.com/kem-a/appimage-thumbnailer" \
+            --depends "(p7zip-plugins or 7zip)" \
             -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.${{ matrix.fpm_arch_rpm }}.rpm" \
             -C "$DESTDIR" usr
       - name: Upload release packages

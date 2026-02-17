@@ -19,8 +19,8 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 ## Prerequisites
 
 - Tooling: `meson` (>=1.1) and `ninja` for builds.
-- Runtime (at least one required):
-  - `7z`/`p7zip-full` for SquashFS AppImages (traditional format).
+- Runtime requirements:
+  - `7z`/`p7zip-full` (**>=23.01**) for SquashFS AppImages (traditional format). Version 23.01+ is required for zstd decompression support.
     - `dwarfs` tools (`dwarfsextract`, `dwarfsck`) for DwarFS AppImages — bundled automatically during build.
 - Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
@@ -97,7 +97,7 @@ Type `appimage-thumbnailer --help` for more info
 rm -rf ~/.cache/thumbnails/*
 ```
 
-2. Run thumbnailer manually to test if icon is extracted
+1. Run thumbnailer manually to test if icon is extracted
 
 ```bash
 appimage-thumbnailer sample.AppImage icon.png 256
