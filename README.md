@@ -107,7 +107,25 @@ Type `appimage-thumbnailer --help` for more info
 rm -rf ~/.cache/thumbnails/*
 ```
 
-1. Run thumbnailer manually to test if icon is extracted
+2. SELinux blocking `unsquashfs` and `appimage-thumbnailer`. This can happen on distros like Fedora that uses selinux. 
+
+   * Error: *SELinux is preventing unsquashfs from create access on the lnk_file .DirIcon.* Allow this access for now by executing:
+
+   ```bash
+   sudo su
+   ausearch -c 'unsquashfs' --raw | audit2allow -M my-unsquashfs
+   semodule -X 300 -i my-unsquashfs.pp
+   ```
+
+   * Error: *SELinux is preventing appimage-thumbn from unlink access on the lnk_file .DirIcon.* Allow this access for now by executing:
+
+   ```bash
+   sudo su
+   ausearch -c 'appimage-thumbn' --raw | audit2allow -M my-appimagethumbn
+   semodule -X 300 -i my-appimagethumbn.pp
+   ```
+
+5. Run thumbnailer manually to test if icon is extracted
 
 ```bash
 appimage-thumbnailer sample.AppImage icon.png 256
