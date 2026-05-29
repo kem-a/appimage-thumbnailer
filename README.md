@@ -107,9 +107,9 @@ Type `appimage-thumbnailer --help` for more info
 rm -rf ~/.cache/thumbnails/*
 ```
 
-2. SELinux blocking `unsquashfs` and `appimage-thumbnailer`. This can happen on distros like Fedora that uses selinux. 
+1. SELinux blocking `unsquashfs` and `appimage-thumbnailer`. This can happen on distros like Fedora that uses selinux.
 
-   * Error: *SELinux is preventing unsquashfs from create access on the lnk_file .DirIcon.* Allow this access for now by executing:
+   - Error: *SELinux is preventing unsquashfs from create access on the lnk_file .DirIcon.* Allow this access for now by executing:
 
    ```bash
    sudo su
@@ -117,7 +117,7 @@ rm -rf ~/.cache/thumbnails/*
    semodule -X 300 -i my-unsquashfs.pp
    ```
 
-   * Error: *SELinux is preventing appimage-thumbn from unlink access on the lnk_file .DirIcon.* Allow this access for now by executing:
+   - Error: *SELinux is preventing appimage-thumbn from unlink access on the lnk_file .DirIcon.* Allow this access for now by executing:
 
    ```bash
    sudo su
@@ -125,11 +125,17 @@ rm -rf ~/.cache/thumbnails/*
    semodule -X 300 -i my-appimagethumbn.pp
    ```
 
-5. Run thumbnailer manually to test if icon is extracted
+2. Run thumbnailer manually to test if icon is extracted
 
 ```bash
 appimage-thumbnailer sample.AppImage icon.png 256
 ```
+
+## Known issues
+
+- DwarFS appimage thumbmnails doesn't show icons in Dolphin
+
+Must uncheck "AppImage" under Settings -> Configure Dolphin... -> General -> Previews. Only "AppImage application bundle" needs to be checked
 
 ## License
 
