@@ -9,3 +9,9 @@ option('bundle_squashfs',
   value: true,
   description: 'Bundle unsquashfs from squashfs-tools (built from source at build time). If disabled, system unsquashfs is used.'
 )
+
+option('shadow',
+  type: 'boolean',
+  value: true,
+  description: 'Render a subtle drop shadow beneath the thumbnail icon'
+)

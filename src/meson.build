@@ -10,6 +10,7 @@ executable('appimage-thumbnailer',
   c_args: [
     '-DDWARFS_TOOLS_DIR="@0@"'.format(tools_dir),
     '-DSQUASHFS_TOOLS_DIR="@0@"'.format(tools_dir),
+    '-DAPPIMAGE_ENABLE_SHADOW=@0@'.format(get_option('shadow') ? '1' : '0'),
   ],
   install: true
 )

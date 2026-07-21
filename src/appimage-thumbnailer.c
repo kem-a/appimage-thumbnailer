@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,11 @@
 
 #ifndef APPIMAGE_THUMBNAILER_VERSION
 #define APPIMAGE_THUMBNAILER_VERSION "unknown"
+#endif
+
+/* Drop shadow beneath the thumbnail icon; toggled via the meson 'shadow' option. */
+#ifndef APPIMAGE_ENABLE_SHADOW
+#define APPIMAGE_ENABLE_SHADOW 1
 #endif
 
 #ifndef MIN
@@ -140,6 +146,201 @@ payload_is_svg(const guchar *data, gsize len)
     return found;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Soft drop shadow (derived from the icon's alpha silhouette)        */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    int    blur_radius;   /* per-pass box radius, in pixels          */
+    int    passes;        /* box-blur passes (3 ~= Gaussian)         */
+    int    offset_x;      /* shadow offset                           */
+    int    offset_y;
+    double opacity;       /* shadow darkness at full coverage        */
+    int    margin;        /* padding kept around the icon for the    */
+                          /* shadow to spread into                   */
+} ShadowParams;
+
+static ShadowParams
+shadow_params(int size)
+{
+#if APPIMAGE_ENABLE_SHADOW
+    ShadowParams s;
+    s.blur_radius = MAX(2, size / 48);
+    s.passes      = 3;
+    s.offset_x    = 0;
+    s.offset_y    = MAX(2, size / 32);
+    s.opacity     = 0.55;
+
+    const int spread = s.blur_radius * s.passes;
+    const int pad    = MAX(2, size / 64);
+    const int m      = spread + MAX(s.offset_x, s.offset_y) + pad;
+    const int cap    = MAX(1, size / 4);   /* never shrink icon below half */
+    s.margin = MIN(m, cap);
+    return s;
+#else
+    /* Shadow disabled: no margin, so the icon fills the whole frame. */
+    (void)size;
+    const ShadowParams s = {0, 0, 0, 0, 0.0, 0};
+    return s;
+#endif
+}
+
+#if APPIMAGE_ENABLE_SHADOW
+/* Separable box blur on an 8-bit alpha buffer, in place. */
+static void
+box_blur_a8(unsigned char *data, int w, int h, int stride, int radius, int passes)
+{
+    if (radius < 1 || w <= 0 || h <= 0)
+        return;
+
+    unsigned char *tmp = g_malloc((size_t)stride * (size_t)h);
+    const int win = 2 * radius + 1;
+
+    for (int p = 0; p < passes; ++p) {
+        /* horizontal: data -> tmp */
+        for (int y = 0; y < h; ++y) {
+            const unsigned char *row = data + (size_t)y * stride;
+            unsigned char *out = tmp + (size_t)y * stride;
+            int sum = 0;
+            for (int i = -radius; i <= radius; ++i) {
+                int xi = i < 0 ? 0 : (i >= w ? w - 1 : i);
+                sum += row[xi];
+            }
+            for (int x = 0; x < w; ++x) {
+                out[x] = (unsigned char)(sum / win);
+                int add = x + radius + 1; if (add > w - 1) add = w - 1;
+                int rem = x - radius;     if (rem < 0)     rem = 0;
+                sum += row[add] - row[rem];
+            }
+        }
+        /* vertical: tmp -> data */
+        for (int x = 0; x < w; ++x) {
+            int sum = 0;
+            for (int i = -radius; i <= radius; ++i) {
+                int yi = i < 0 ? 0 : (i >= h ? h - 1 : i);
+                sum += tmp[(size_t)yi * stride + x];
+            }
+            for (int y = 0; y < h; ++y) {
+                data[(size_t)y * stride + x] = (unsigned char)(sum / win);
+                int add = y + radius + 1; if (add > h - 1) add = h - 1;
+                int rem = y - radius;     if (rem < 0)     rem = 0;
+                sum += tmp[(size_t)add * stride + x] - tmp[(size_t)rem * stride + x];
+            }
+        }
+    }
+
+    g_free(tmp);
+}
+#endif /* APPIMAGE_ENABLE_SHADOW */
+
+/* Blit a (already scaled) pixbuf, centered, onto an ARGB32 Cairo surface. */
+static void
+paint_pixbuf_centered(cairo_surface_t *dst, GdkPixbuf *pixbuf, int size)
+{
+    const int pw = gdk_pixbuf_get_width(pixbuf);
+    const int ph = gdk_pixbuf_get_height(pixbuf);
+    const int nch = gdk_pixbuf_get_n_channels(pixbuf);
+    const gboolean has_alpha = gdk_pixbuf_get_has_alpha(pixbuf);
+    const int src_stride = gdk_pixbuf_get_rowstride(pixbuf);
+    const guchar *src = gdk_pixbuf_get_pixels(pixbuf);
+
+    cairo_surface_flush(dst);
+    unsigned char *dbuf = cairo_image_surface_get_data(dst);
+    const int dstride = cairo_image_surface_get_stride(dst);
+
+    int ox = (size - pw) / 2; if (ox < 0) ox = 0;
+    int oy = (size - ph) / 2; if (oy < 0) oy = 0;
+    const int copy_w = MIN(pw, size - ox);
+    const int copy_h = MIN(ph, size - oy);
+
+    for (int y = 0; y < copy_h; ++y) {
+        const guchar *srow = src + (size_t)y * src_stride;
+        uint32_t *drow = (uint32_t *)(dbuf + (size_t)(oy + y) * dstride);
+        for (int x = 0; x < copy_w; ++x) {
+            const guchar *ppix = srow + (size_t)x * nch;
+            const guchar r = ppix[0], g = ppix[1], b = ppix[2];
+            const guchar a = has_alpha ? ppix[3] : 0xFF;
+            /* CAIRO_FORMAT_ARGB32 stores premultiplied, alpha in the high byte */
+            const guchar pr = (guchar)((r * a + 127) / 255);
+            const guchar pg = (guchar)((g * a + 127) / 255);
+            const guchar pb = (guchar)((b * a + 127) / 255);
+            drow[ox + x] = ((uint32_t)a  << 24) | ((uint32_t)pr << 16) |
+                           ((uint32_t)pg << 8)  |  (uint32_t)pb;
+        }
+    }
+
+    cairo_surface_mark_dirty(dst);
+}
+
+/* Composite a soft shadow (from `icon`'s alpha) under `icon`, write PNG. */
+static gboolean
+compose_shadow_and_write(cairo_surface_t *icon, int size, const char *out_path)
+{
+    if (cairo_surface_status(icon) != CAIRO_STATUS_SUCCESS)
+        return FALSE;
+
+#if !APPIMAGE_ENABLE_SHADOW
+    /* Shadow disabled: the icon already fills the frame; write it as-is. */
+    (void)size;
+    const cairo_status_t st = cairo_surface_write_to_png(icon, out_path);
+    if (st != CAIRO_STATUS_SUCCESS) {
+        g_printerr("Failed to write thumbnail: %s\n", cairo_status_to_string(st));
+        return FALSE;
+    }
+    return TRUE;
+#else
+    const ShadowParams sp = shadow_params(size);
+
+    cairo_surface_t *mask = cairo_image_surface_create(CAIRO_FORMAT_A8, size, size);
+    if (cairo_surface_status(mask) != CAIRO_STATUS_SUCCESS) {
+        cairo_surface_destroy(mask);
+        return FALSE;
+    }
+
+    /* Copy the icon's alpha channel into the A8 mask, then blur it. */
+    cairo_surface_flush(icon);
+    const unsigned char *ibuf = cairo_image_surface_get_data(icon);
+    const int istride = cairo_image_surface_get_stride(icon);
+    unsigned char *mbuf = cairo_image_surface_get_data(mask);
+    const int mstride = cairo_image_surface_get_stride(mask);
+
+    for (int y = 0; y < size; ++y) {
+        const uint32_t *irow = (const uint32_t *)(ibuf + (size_t)y * istride);
+        unsigned char *mrow = mbuf + (size_t)y * mstride;
+        for (int x = 0; x < size; ++x)
+            mrow[x] = (unsigned char)((irow[x] >> 24) & 0xFF);
+    }
+
+    box_blur_a8(mbuf, size, size, mstride, sp.blur_radius, sp.passes);
+    cairo_surface_mark_dirty(mask);
+
+    cairo_surface_t *canvas = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
+    cairo_t *cr = cairo_create(canvas);
+
+    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+    cairo_paint(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+
+    cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, sp.opacity);
+    cairo_mask_surface(cr, mask, sp.offset_x, sp.offset_y);
+
+    cairo_set_source_surface(cr, icon, 0, 0);
+    cairo_paint(cr);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(mask);
+
+    const cairo_status_t status = cairo_surface_write_to_png(canvas, out_path);
+    cairo_surface_destroy(canvas);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        g_printerr("Failed to write thumbnail: %s\n", cairo_status_to_string(status));
+        return FALSE;
+    }
+    return TRUE;
+#endif /* APPIMAGE_ENABLE_SHADOW */
+}
+
 static gboolean
 process_svg_payload(const guchar *data, gsize len, const char *out_path, int size)
 {
@@ -166,18 +367,22 @@ process_svg_payload(const guchar *data, gsize len, const char *out_path, int siz
     if (width  <= 0) width  = size;
     if (height <= 0) height = size;
 
-    double scale = MIN((double)size / width, (double)size / height);
+    /* Leave a margin so the drop shadow has room to spread. */
+    const ShadowParams sp = shadow_params(size);
+    int inner = size - 2 * sp.margin;
+    if (inner < 1)
+        inner = size;
+
+    double scale = MIN((double)inner / width, (double)inner / height);
     if (!isfinite(scale) || scale <= 0)
-        scale = (double)size / MAX(width, height);
+        scale = (double)inner / MAX(width, height);
     if (!isfinite(scale) || scale <= 0)
         scale = 1.0;
 
     const double scaled_w = width * scale;
     const double scaled_h = height * scale;
-    const int target_w = size;
-    const int target_h = size;
 
-    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, target_w, target_h);
+    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
     cairo_t *cr = cairo_create(surface);
 
     cairo_save(cr);
@@ -185,8 +390,8 @@ process_svg_payload(const guchar *data, gsize len, const char *out_path, int siz
     cairo_paint(cr);
     cairo_restore(cr);
 
-    const double translate_x = (target_w - scaled_w) / 2.0;
-    const double translate_y = (target_h - scaled_h) / 2.0;
+    const double translate_x = (size - scaled_w) / 2.0;
+    const double translate_y = (size - scaled_h) / 2.0;
     cairo_translate(cr, translate_x, translate_y);
     cairo_scale(cr, scale, scale);
 
@@ -202,17 +407,13 @@ process_svg_payload(const guchar *data, gsize len, const char *out_path, int siz
         return FALSE;
     }
 
-    cairo_status_t status = cairo_surface_write_to_png(surface, out_path);
+    gboolean ok = compose_shadow_and_write(surface, size, out_path);
     cairo_surface_destroy(surface);
     g_object_unref(handle);
 
-    if (status != CAIRO_STATUS_SUCCESS) {
-        g_printerr("Failed to write SVG thumbnail: %s\n", cairo_status_to_string(status));
-        return FALSE;
-    }
-
-    g_debug("process_svg_payload: thumbnail written to '%s'", out_path);
-    return TRUE;
+    if (ok)
+        g_debug("process_svg_payload: thumbnail written to '%s'", out_path);
+    return ok;
 }
 
 static GdkPixbuf *
@@ -292,17 +493,27 @@ process_icon_payload(const guchar *data, gsize len, const char *out_path, int si
     g_debug("process_icon_payload: loaded raster %dx%d",
             gdk_pixbuf_get_width(pixbuf), gdk_pixbuf_get_height(pixbuf));
 
-    GdkPixbuf *scaled = scale_pixbuf(pixbuf, size);
+    /* Leave a margin so the drop shadow has room to spread. */
+    const ShadowParams sp = shadow_params(size);
+    int inner = size - 2 * sp.margin;
+    if (inner < 1)
+        inner = size;
+
+    GdkPixbuf *scaled = scale_pixbuf(pixbuf, inner);
     if (!scaled)
         scaled = g_object_ref(pixbuf);
 
-    gboolean ok = gdk_pixbuf_save(scaled, out_path, "png", &error, NULL);
-    if (!ok) {
-        g_printerr("Failed to write thumbnail: %s\n", error->message);
-        g_error_free(error);
+    cairo_surface_t *icon = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
+    gboolean ok = FALSE;
+    if (cairo_surface_status(icon) == CAIRO_STATUS_SUCCESS) {
+        paint_pixbuf_centered(icon, scaled, size);
+        ok = compose_shadow_and_write(icon, size, out_path);
+        if (ok)
+            g_debug("process_icon_payload: thumbnail written to '%s'", out_path);
     } else {
-        g_debug("process_icon_payload: thumbnail written to '%s'", out_path);
+        g_printerr("Failed to allocate image surface for thumbnail\n");
     }
+    cairo_surface_destroy(icon);
 
     g_object_unref(scaled);
     g_object_unref(pixbuf);

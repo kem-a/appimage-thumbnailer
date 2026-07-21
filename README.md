@@ -15,6 +15,7 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 
 - Supports both **SquashFS** (traditional) and **DwarFS** AppImage formats.
 - Resolves `.DirIcon` pointers (with bounded symlink depth).
+- Renders a subtle drop shadow beneath each icon (enabled by default; disable with `-Dshadow=false`).
 
 ## Prerequisites
 
@@ -78,6 +79,16 @@ sudo ninja -C build install
 Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.thumbnailer` descriptor under your Meson `prefix` (default `/usr/local`).
 
 Uninstall with `sudo ninja -C build uninstall` using the same build directory.
+
+### Build options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `-Dshadow` | `true` | Render a subtle drop shadow beneath the thumbnail icon. |
+| `-Dbundle_squashfs` | `true` | Build and bundle `unsquashfs`; if disabled, the system `unsquashfs` is used. |
+| `-Dbundle_dwarfs` | `true` | Download and bundle `dwarfsextract` for DwarFS AppImages. |
+
+Pass options at configure time, e.g. `meson setup build -Dshadow=false`, or change them afterwards with `meson configure build -Dshadow=false`.
 
 ## (Optional) Remove thumbnail background
 
