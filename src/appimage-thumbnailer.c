@@ -151,36 +151,64 @@ payload_is_svg(const guchar *data, gsize len)
 /* ------------------------------------------------------------------ */
 
 typedef struct {
-    int    blur_radius;   /* per-pass box radius, in pixels          */
-    int    passes;        /* box-blur passes (3 ~= Gaussian)         */
-    int    offset_x;      /* shadow offset                           */
+    int    blur_radius;    /* per-pass box radius, in pixels         */
+    int    passes;         /* box-blur passes (3 ~= Gaussian)        */
+    int    offset_x;       /* shadow offset                          */
     int    offset_y;
-    double opacity;       /* shadow darkness at full coverage        */
-    int    margin;        /* padding kept around the icon for the    */
-                          /* shadow to spread into                   */
+    double opacity;        /* shadow darkness at full coverage       */
+    /* Per-side padding reserved for the shadow. Asymmetric: the shadow
+       only falls below/right, so the icon sits high-and-centered and the
+       large margin is reserved only where the shadow actually lands. */
+    int    margin_top;
+    int    margin_bottom;
+    int    margin_left;
+    int    margin_right;
 } ShadowParams;
+
+/* Icon placement box (origin + size) once the shadow margins are removed. */
+static void
+shadow_icon_box(const ShadowParams *sp, int size,
+                int *bx, int *by, int *bw, int *bh)
+{
+    *bx = sp->margin_left;
+    *by = sp->margin_top;
+    *bw = MAX(1, size - sp->margin_left - sp->margin_right);
+    *bh = MAX(1, size - sp->margin_top  - sp->margin_bottom);
+}
 
 static ShadowParams
 shadow_params(int size)
 {
 #if APPIMAGE_ENABLE_SHADOW
     ShadowParams s;
-    s.blur_radius = MAX(2, size / 48);
+    s.blur_radius = MAX(2, size / 64);
     s.passes      = 3;
     s.offset_x    = 0;
     s.offset_y    = MAX(2, size / 32);
     s.opacity     = 0.55;
 
-    const int spread = s.blur_radius * s.passes;
-    const int pad    = MAX(2, size / 64);
-    const int m      = spread + MAX(s.offset_x, s.offset_y) + pad;
-    const int cap    = MAX(1, size / 4);   /* never shrink icon below half */
-    s.margin = MIN(m, cap);
+    /* Reserve the blur's full support (radius per pass) so no tail clips,
+       but asymmetrically: the downward offset is reserved only at the bottom,
+       letting the icon sit high-and-centered and fill ~90% of the frame. */
+    const int reach = s.blur_radius * s.passes;
+    const int pad   = MAX(1, size / 256);
+
+    s.margin_top    = MAX(0, reach - s.offset_y) + pad;
+    s.margin_bottom = reach + s.offset_y + pad;
+    s.margin_left   = MAX(0, reach - s.offset_x) + pad;
+    s.margin_right  = reach + s.offset_x + pad;
+
+    /* Never let any side eat more than a quarter of the frame. */
+    const int cap = MAX(1, size / 4);
+    s.margin_top    = MIN(s.margin_top,    cap);
+    s.margin_bottom = MIN(s.margin_bottom, cap);
+    s.margin_left   = MIN(s.margin_left,   cap);
+    s.margin_right  = MIN(s.margin_right,  cap);
     return s;
 #else
-    /* Shadow disabled: no margin, so the icon fills the whole frame. */
+    /* Shadow disabled: no margins, so the icon fills the whole frame. */
     (void)size;
-    const ShadowParams s = {0, 0, 0, 0, 0.0, 0};
+    const ShadowParams s = {0, 0, 0, 0, 0.0, 0, 0, 0, 0};
     return s;
 #endif
 }
@@ -233,9 +261,11 @@ box_blur_a8(unsigned char *data, int w, int h, int stride, int radius, int passe
 }
 #endif /* APPIMAGE_ENABLE_SHADOW */
 
-/* Blit a (already scaled) pixbuf, centered, onto an ARGB32 Cairo surface. */
+/* Blit a (already scaled) pixbuf onto an ARGB32 Cairo surface, centered
+   within the box (box_x, box_y, box_w, box_h). */
 static void
-paint_pixbuf_centered(cairo_surface_t *dst, GdkPixbuf *pixbuf, int size)
+paint_pixbuf_in_box(cairo_surface_t *dst, GdkPixbuf *pixbuf, int surf_size,
+                    int box_x, int box_y, int box_w, int box_h)
 {
     const int pw = gdk_pixbuf_get_width(pixbuf);
     const int ph = gdk_pixbuf_get_height(pixbuf);
@@ -248,10 +278,10 @@ paint_pixbuf_centered(cairo_surface_t *dst, GdkPixbuf *pixbuf, int size)
     unsigned char *dbuf = cairo_image_surface_get_data(dst);
     const int dstride = cairo_image_surface_get_stride(dst);
 
-    int ox = (size - pw) / 2; if (ox < 0) ox = 0;
-    int oy = (size - ph) / 2; if (oy < 0) oy = 0;
-    const int copy_w = MIN(pw, size - ox);
-    const int copy_h = MIN(ph, size - oy);
+    int ox = box_x + (box_w - pw) / 2; if (ox < 0) ox = 0;
+    int oy = box_y + (box_h - ph) / 2; if (oy < 0) oy = 0;
+    const int copy_w = MIN(pw, surf_size - ox);
+    const int copy_h = MIN(ph, surf_size - oy);
 
     for (int y = 0; y < copy_h; ++y) {
         const guchar *srow = src + (size_t)y * src_stride;
@@ -369,13 +399,12 @@ process_svg_payload(const guchar *data, gsize len, const char *out_path, int siz
 
     /* Leave a margin so the drop shadow has room to spread. */
     const ShadowParams sp = shadow_params(size);
-    int inner = size - 2 * sp.margin;
-    if (inner < 1)
-        inner = size;
+    int bx, by, bw, bh;
+    shadow_icon_box(&sp, size, &bx, &by, &bw, &bh);
 
-    double scale = MIN((double)inner / width, (double)inner / height);
+    double scale = MIN((double)bw / width, (double)bh / height);
     if (!isfinite(scale) || scale <= 0)
-        scale = (double)inner / MAX(width, height);
+        scale = (double)MIN(bw, bh) / MAX(width, height);
     if (!isfinite(scale) || scale <= 0)
         scale = 1.0;
 
@@ -390,8 +419,8 @@ process_svg_payload(const guchar *data, gsize len, const char *out_path, int siz
     cairo_paint(cr);
     cairo_restore(cr);
 
-    const double translate_x = (size - scaled_w) / 2.0;
-    const double translate_y = (size - scaled_h) / 2.0;
+    const double translate_x = bx + (bw - scaled_w) / 2.0;
+    const double translate_y = by + (bh - scaled_h) / 2.0;
     cairo_translate(cr, translate_x, translate_y);
     cairo_scale(cr, scale, scale);
 
@@ -495,18 +524,17 @@ process_icon_payload(const guchar *data, gsize len, const char *out_path, int si
 
     /* Leave a margin so the drop shadow has room to spread. */
     const ShadowParams sp = shadow_params(size);
-    int inner = size - 2 * sp.margin;
-    if (inner < 1)
-        inner = size;
+    int bx, by, bw, bh;
+    shadow_icon_box(&sp, size, &bx, &by, &bw, &bh);
 
-    GdkPixbuf *scaled = scale_pixbuf(pixbuf, inner);
+    GdkPixbuf *scaled = scale_pixbuf(pixbuf, MIN(bw, bh));
     if (!scaled)
         scaled = g_object_ref(pixbuf);
 
     cairo_surface_t *icon = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
     gboolean ok = FALSE;
     if (cairo_surface_status(icon) == CAIRO_STATUS_SUCCESS) {
-        paint_pixbuf_centered(icon, scaled, size);
+        paint_pixbuf_in_box(icon, scaled, size, bx, by, bw, bh);
         ok = compose_shadow_and_write(icon, size, out_path);
         if (ok)
             g_debug("process_icon_payload: thumbnail written to '%s'", out_path);
