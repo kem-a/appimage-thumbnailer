@@ -70,9 +70,12 @@ jobs:
           if [ "${{ matrix.is_cross }}" = "true" ]; then
             # Install cross-compilation toolchain and arm64 dev libraries
             # Native libglib2.0-dev-bin (Multi-Arch: foreign) satisfies the arm64 dep
+            # qemu-user-static satisfies libglib2.0-dev:arm64's "python3 | qemu-user-static";
+            # without it apt swaps in python3:arm64 and removes meson
             sudo apt-get install -y \
               gcc-aarch64-linux-gnu \
               g++-aarch64-linux-gnu \
+              qemu-user-static \
               libglib2.0-dev:arm64 \
               libgdk-pixbuf-2.0-dev:arm64 \
               librsvg2-dev:arm64 \
