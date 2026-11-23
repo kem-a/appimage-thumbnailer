@@ -8,3 +8,5 @@ dist/
 *.AppImage
 .vscode/
 .c[a-z]*/
+/target
+*.zip

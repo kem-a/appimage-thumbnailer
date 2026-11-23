@@ -15,13 +15,10 @@ jobs:
             runs_on: ubuntu-24.04
             fpm_arch_deb: amd64
             fpm_arch_rpm: x86_64
-            is_cross: false
           - arch: aarch64
-            runs_on: ubuntu-24.04
+            runs_on: ubuntu-24.04-arm
             fpm_arch_deb: arm64
             fpm_arch_rpm: aarch64
-            is_cross: true
-            cross_file: .github/cross/aarch64.txt
     runs-on: ${{ matrix.runs_on }}
     permissions:
       contents: write
@@ -32,78 +29,25 @@ jobs:
       - name: Install build and packaging dependencies
         shell: bash
         run: |
-          if [ "${{ matrix.is_cross }}" = "true" ]; then
-            sudo dpkg --add-architecture arm64
-            # Handle DEB822 format (Ubuntu 24.04+) - add architecture restriction
-            if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-              sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-            fi
-            # Handle traditional format
-            if [ -f /etc/apt/sources.list ]; then
-              sudo sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
-              sudo sed -i 's/^deb https/deb [arch=amd64] https/g' /etc/apt/sources.list
-            fi
-            # Add arm64 sources from ports.ubuntu.com
-            CODENAME=$(lsb_release -cs)
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
-          fi
           sudo apt-get update
-          # Install native packages first
           sudo apt-get install -y \
-            curl \
-            meson \
-            ninja-build \
-            pkg-config \
-            gcc \
             build-essential \
-            libglib2.0-dev \
-            libgdk-pixbuf-2.0-dev \
-            librsvg2-dev \
-            libcairo2-dev \
             jq \
             ruby \
             ruby-dev \
-            rpm \
-            squashfs-tools
-          if [ "${{ matrix.is_cross }}" = "true" ]; then
-            # Install cross-compilation toolchain and arm64 dev libraries
-            # Native libglib2.0-dev-bin (Multi-Arch: foreign) satisfies the arm64 dep
-            # qemu-user-static satisfies libglib2.0-dev:arm64's "python3 | qemu-user-static";
-            # without it apt swaps in python3:arm64 and removes meson
-            sudo apt-get install -y \
-              gcc-aarch64-linux-gnu \
-              g++-aarch64-linux-gnu \
-              qemu-user-static \
-              libglib2.0-dev:arm64 \
-              libgdk-pixbuf-2.0-dev:arm64 \
-              librsvg2-dev:arm64 \
-              libcairo2-dev:arm64
-            # Create pkg-config wrapper for cross-compilation
-            echo '#!/bin/sh' | sudo tee /usr/local/bin/aarch64-linux-gnu-pkg-config
-            echo 'PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig pkg-config "$@"' | sudo tee -a /usr/local/bin/aarch64-linux-gnu-pkg-config
-            sudo chmod +x /usr/local/bin/aarch64-linux-gnu-pkg-config
-          fi
+            rpm
           sudo gem install --no-document fpm
 
-      - name: Configure
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
         shell: bash
-        run: |
-          EXTRA_OPTS=""
-          if [ "${{ matrix.is_cross }}" = "true" ]; then
-            EXTRA_OPTS="--cross-file ${{ matrix.cross_file }}"
-          fi
-          meson setup build --prefix=/usr -Dbundle_dwarfs=true $EXTRA_OPTS
+        run: make check
 
       - name: Build
         shell: bash
-        run: ninja -C build
-
-      - name: Run tests
-        if: matrix.is_cross == false
-        shell: bash
-        run: meson test -C build
+        run: make
 
       - name: Stage install tree
         shell: bash
@@ -111,13 +55,14 @@ jobs:
           DESTDIR="$GITHUB_WORKSPACE/dist-root"
           rm -rf "$DESTDIR"
           mkdir -p "$DESTDIR"
-          meson install -C build --destdir "$DESTDIR"
+          make install DESTDIR="$DESTDIR" PREFIX=/usr
 
       - name: Capture project version
         id: meta
         shell: bash
         run: |
-          VERSION=$(meson introspect build --projectinfo | jq -r '.version')
+          # Package versions keep the leading v of the release tags
+          VERSION=v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build DEB and RPM packages
@@ -135,7 +80,6 @@ jobs:
             --description "In-process AppImage thumbnailer" \
             --license MIT \
             --url "https://github.com/kem-a/appimage-thumbnailer" \
-            --depends squashfs-tools \
             -p "$PACKAGE_DIR/appimage-thumbnailer_${VERSION}_${{ matrix.fpm_arch_deb }}.deb" \
             -C "$DESTDIR" usr
           fpm -s dir -t rpm -n appimage-thumbnailer \
@@ -144,7 +88,6 @@ jobs:
             --description "In-process AppImage thumbnailer" \
             --license MIT \
             --url "https://github.com/kem-a/appimage-thumbnailer" \
-            --depends squashfs-tools \
             -p "$PACKAGE_DIR/appimage-thumbnailer-${VERSION}-1.${{ matrix.fpm_arch_rpm }}.rpm" \
             -C "$DESTDIR" usr
       - name: Upload build artifacts
