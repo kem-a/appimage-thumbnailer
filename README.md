@@ -4,7 +4,7 @@
 [![Download](https://img.shields.io/badge/Download-latest-blue)](https://github.com/kem-a/appimage-thumbnailer/releases/latest)
 [![Release](https://img.shields.io/github/v/release/kem-a/appimage-thumbnailer?semver)](https://github.com/kem-a/appimage-thumbnailer/releases/latest)
 [![License](https://img.shields.io/github/license/kem-a/appimage-thumbnailer)](https://github.com/kem-a/appimage-thumbnailer/blob/main/LICENSE)
-![C](https://img.shields.io/badge/C-11-blue)
+![Rust](https://img.shields.io/badge/Rust-2024-orange)
 [![Stars](https://img.shields.io/github/stars/kem-a/appimage-thumbnailer?style=social)](https://github.com/kem-a/appimage-thumbnailer/stargazers)
 
 An in-process thumbnailer that extracts AppImage icons and writes ready-to-use PNG thumbnails for desktop environments implementing the freedesktop.org spec.
@@ -15,55 +15,37 @@ An in-process thumbnailer that extracts AppImage icons and writes ready-to-use P
 
 - Supports both **SquashFS** (traditional) and **DwarFS** AppImage formats.
 - Resolves `.DirIcon` pointers (with bounded symlink depth).
-- Renders a subtle drop shadow beneath each icon (enabled by default; disable with `-Dshadow=false`).
+- Reads SquashFS (gzip, xz, zstd, lz4) and DwarFS (zstd, lzma, lz4) in-process: no `unsquashfs` or `dwarfsextract` needed.
+- Renders a subtle drop shadow beneath each icon (enabled by default, see [Build options](#build-options)).
 
 ## Prerequisites
 
-- Tooling: `meson` (>=1.1) and `ninja` for builds.
-- Runtime requirements:
-  - `unsquashfs` from [`squashfs-tools`](https://github.com/plougher/squashfs-tools) for SquashFS AppImages (traditional format). Available in all major distro repos. Optionally bundled at build time with `-Dbundle_squashfs=true`.
-  - `dwarfsextract` from [`dwarfs`](https://github.com/mhx/dwarfs) for DwarFS AppImages — bundled automatically during build.
-- Linked system libraries (usually present on major distros): GLib/GIO (>=2.56), GdkPixbuf (>=2.42), librsvg (>=2.54), Cairo, and libm (optional but detected).
+- Build: Rust 1.90 or newer with `cargo`, a C compiler (the bundled zstd, xz and lz4 decoders are compiled from source) and `make`.
+- Runtime: no extra packages. The binary links only glibc and libgcc_s.
 - Platform: a freedesktop.org-compliant thumbnail cache (GNOME, KDE, etc.).
 
 ## Build & Install
 
 <details> <summary> Installing Dependencies <b>(click to open)</b> </summary>
 
+If your distro's `cargo` is older than 1.90 (`cargo --version`), install Rust with [rustup](https://rustup.rs) instead.
+
 **Fedora / RHEL / CentOS:**
 
 ```bash
-sudo dnf install meson ninja-build squashfs-tools glib2-devel gdk-pixbuf2-devel librsvg2-devel cairo-devel
-```
-
-Additional packages required when bundling unsquashfs (`-Dbundle_squashfs=true`) or dwarfsextract (`-Dbundle_dwarfs=true`, enabled by default):
-
-```bash
-sudo dnf install curl zlib-devel libzstd-devel xz-devel
+sudo dnf install cargo gcc make
 ```
 
 **Ubuntu / Debian:**
 
 ```bash
-sudo apt install meson ninja-build squashfs-tools libglib2.0-dev libgdk-pixbuf-2.0-dev librsvg2-dev libcairo2-dev
-```
-
-Additional packages required when bundling unsquashfs or dwarfsextract:
-
-```bash
-sudo apt install curl zlib1g-dev libzstd-dev liblzma-dev
+sudo apt install cargo build-essential
 ```
 
 **Arch Linux:**
 
 ```bash
-sudo pacman -S meson ninja squashfs-tools glib2 gdk-pixbuf2 librsvg cairo
-```
-
-Additional packages required when bundling unsquashfs or dwarfsextract:
-
-```bash
-sudo pacman -S curl zlib zstd xz
+sudo pacman -S rust gcc make
 ```
 
 </details>
@@ -71,24 +53,25 @@ sudo pacman -S curl zlib zstd xz
 ```bash
 git clone https://github.com/kem-a/appimage-thumbnailer.git
 cd appimage-thumbnailer
-meson setup build
-ninja -C build
-sudo ninja -C build install
+make
+sudo make install
 ```
 
-Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.thumbnailer` descriptor under your Meson `prefix` (default `/usr/local`).
+Installation drops the `appimage-thumbnailer` binary and `appimage-thumbnailer.thumbnailer` descriptor under `PREFIX` (default `/usr/local`), e.g. `sudo make install PREFIX=/usr`.
 
-Uninstall with `sudo ninja -C build uninstall` using the same build directory.
+Uninstall with `sudo make uninstall`, using the same `PREFIX`.
+
+Upgrading from a 4.x build made with Meson: the bundled `unsquashfs` and `dwarfsextract` under `$prefix/$libdir/appimage-thumbnailer` are no longer used. Run `sudo ninja -C build uninstall` in the old build directory first, or delete that folder.
+
+Run the tests with `make check`.
 
 ### Build options
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `-Dshadow` | `true` | Render a subtle drop shadow beneath the thumbnail icon. |
-| `-Dbundle_squashfs` | `true` | Build and bundle `unsquashfs`; if disabled, the system `unsquashfs` is used. |
-| `-Dbundle_dwarfs` | `true` | Download and bundle `dwarfsextract` for DwarFS AppImages. |
+| `shadow` Cargo feature | on | Render a subtle drop shadow beneath the thumbnail icon. |
 
-Pass options at configure time, e.g. `meson setup build -Dshadow=false`, or change them afterwards with `meson configure build -Dshadow=false`.
+Build without the shadow with `make CARGO_FLAGS=--no-default-features`.
 
 ## (Optional) Remove thumbnail background
 
@@ -118,28 +101,11 @@ Type `appimage-thumbnailer --help` for more info
 rm -rf ~/.cache/thumbnails/*
 ```
 
-1. SELinux blocking `unsquashfs` and `appimage-thumbnailer`. This can happen on distros like Fedora that uses selinux.
-
-   - Error: *SELinux is preventing unsquashfs from create access on the lnk_file .DirIcon.* Allow this access for now by executing:
-
-   ```bash
-   sudo su
-   ausearch -c 'unsquashfs' --raw | audit2allow -M my-unsquashfs
-   semodule -X 300 -i my-unsquashfs.pp
-   ```
-
-   - Error: *SELinux is preventing appimage-thumbn from unlink access on the lnk_file .DirIcon.* Allow this access for now by executing:
-
-   ```bash
-   sudo su
-   ausearch -c 'appimage-thumbn' --raw | audit2allow -M my-appimagethumbn
-   semodule -X 300 -i my-appimagethumbn.pp
-   ```
-
-2. Run thumbnailer manually to test if icon is extracted
+1. Run thumbnailer manually to test if icon is extracted
 
 ```bash
 appimage-thumbnailer sample.AppImage icon.png 256
+G_MESSAGES_DEBUG=all appimage-thumbnailer sample.AppImage icon.png 256   # trace every step
 ```
 
 ## Known issues
