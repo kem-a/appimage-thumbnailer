@@ -12,12 +12,12 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            runs_on: ubuntu-latest
+            runs_on: ubuntu-24.04
             fpm_arch_deb: amd64
             fpm_arch_rpm: x86_64
             is_cross: false
           - arch: aarch64
-            runs_on: ubuntu-latest
+            runs_on: ubuntu-24.04
             fpm_arch_deb: arm64
             fpm_arch_rpm: aarch64
             is_cross: true
