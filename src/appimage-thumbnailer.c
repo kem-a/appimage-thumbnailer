@@ -745,6 +745,14 @@ main(int argc, char **argv)
     gboolean success = process_entry_following_symlinks(
         input, ".DirIcon", output, size, format, offset);
 
+    /* The metadata sidecar's .DirIcon may be missing or point into the DwarFS payload */
+    if (!success && format == APPIMAGE_FORMAT_SQUASHFS && have_dwarfs
+        && appimage_has_sidecar_payload(input)) {
+        g_debug("main: retrying .DirIcon from the DwarFS payload after the metadata sidecar");
+        success = process_entry_following_symlinks(
+            input, ".DirIcon", output, size, APPIMAGE_FORMAT_DWARFS, offset);
+    }
+
     if (!success) {
         g_debug("main: .DirIcon not found or extraction failed for '%s'", input);
         g_printerr("Failed to extract .DirIcon from AppImage\n");

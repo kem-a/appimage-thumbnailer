@@ -35,6 +35,9 @@ static const unsigned char SQFS_MAGIC[4] = {'h', 's', 'q', 's'};
 /* DwarFS magic: "DWARFS" */
 static const unsigned char DWARFS_MAGIC[6] = {'D', 'W', 'A', 'R', 'F', 'S'};
 
+/* uruntime metadata sidecar slot: DwarFS payload starts this far past the ELF end */
+#define METADATA_SLOT_SIZE ((off_t)128 * 1024)
+
 const char *
 appimage_format_name(AppImageFormat format)
 {
@@ -232,4 +235,27 @@ appimage_detect_format(const char *path)
             " in '%s' (magic: %02x %02x %02x %02x)",
             (gint64)offset, path, magic[0], magic[1], magic[2], magic[3]);
     return APPIMAGE_FORMAT_UNKNOWN;
+}
+
+gboolean
+appimage_has_sidecar_payload(const char *path)
+{
+    off_t offset = appimage_payload_offset(path);
+    if (offset <= 0)
+        return FALSE;
+
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return FALSE;
+
+    unsigned char magic[6];
+    gboolean found = pread(fd, magic, sizeof(magic), offset + METADATA_SLOT_SIZE)
+                         == (ssize_t)sizeof(magic)
+                     && memcmp(magic, DWARFS_MAGIC, sizeof(magic)) == 0;
+    close(fd);
+
+    g_debug("appimage_has_sidecar_payload: DwarFS payload at offset %" G_GINT64_FORMAT
+            " %s in '%s'", (gint64)(offset + METADATA_SLOT_SIZE),
+            found ? "found" : "not found", path);
+    return found;
 }

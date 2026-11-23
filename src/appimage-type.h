@@ -50,6 +50,15 @@ off_t appimage_payload_offset(const char *path);
 int appimage_get_type(const char *path);
 
 /**
+ * Check for the uruntime metadata sidecar layout: a small SquashFS at the
+ * payload offset and the real DwarFS payload 128 KiB further on.
+ *
+ * @param path Path to the AppImage file
+ * @return TRUE if DwarFS magic sits at payload offset + 128 KiB
+ */
+gboolean appimage_has_sidecar_payload(const char *path);
+
+/**
  * Return a human-readable name for an AppImageFormat value.
  */
 const char *appimage_format_name(AppImageFormat format);

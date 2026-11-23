@@ -9,7 +9,7 @@
 
 set -e
 
-VERSION="${1:-4.7.4}"
+VERSION="${1:-4.7.5}"
 OUTPUT_DIR="${2:-.}"
 CC="${3:-cc}"
 

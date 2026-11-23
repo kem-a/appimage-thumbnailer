@@ -1,5 +1,5 @@
 project('appimage-thumbnailer', 'c',
-  version: 'v4.1.1',
+  version: 'v4.1.2',
   meson_version: '>=1.1.0',
   default_options: ['warning_level=3', 'c_std=c11']
 )
@@ -22,7 +22,7 @@ if m_dep.found()
 endif
 
 # DwarFS tools configuration
-dwarfs_version = '0.15.5'
+dwarfs_version = '0.15.10'
 dwarfs_tools_dir = get_option('prefix') / get_option('libdir') / 'appimage-thumbnailer'
 
 # Map host CPU to DwarFS release naming
@@ -45,7 +45,7 @@ dwarfs_arch = dwarfs_arch_map.get(host_cpu, '')
 bundle_dwarfs = get_option('bundle_dwarfs')
 
 # SquashFS tools (unsquashfs) configuration
-squashfs_tools_version = '4.6.1'
+squashfs_tools_version = '4.7.5'
 squashfs_tools_dir = dwarfs_tools_dir  # share the same tools directory
 bundle_squashfs = get_option('bundle_squashfs')
 
