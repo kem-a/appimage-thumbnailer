@@ -9,7 +9,8 @@
 
 An in-process thumbnailer that extracts AppImage icons and writes ready-to-use PNG thumbnails for desktop environments implementing the freedesktop.org spec.
 
-<img width="815" height="480" alt="Screenshot From 2025-12-05 00-38-50" src="https://github.com/user-attachments/assets/d5a99e85-71d3-47dd-9174-fc0c56e43d13" />
+<img width="800" height="514" alt="Pasted image" src="https://github.com/user-attachments/assets/63b20b72-3bf8-4963-ae40-2ed740029157" />
+
 
 ### Features
 
